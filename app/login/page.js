@@ -26,7 +26,11 @@ export default function LoginPage() {
       })
 
       if (error) {
-        setError(error.message)
+        if (error.message.toLowerCase().includes('email not confirmed')) {
+          setError('Email not confirmed! Confirm your user in Supabase Dashboard (Auth > Users > ... > Auto-confirm) or disable "Confirm email" in Auth > Providers > Email.')
+        } else {
+          setError(error.message)
+        }
         return
       }
 
