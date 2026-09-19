@@ -278,7 +278,7 @@ export default function NewScanPage() {
         {/* Progress Steps */}
         <div style={{ marginBottom: 32 }}>
           <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
-            {['Capture', 'Quality', 'Detect', 'Measure', 'Calculate', 'Review'].map((label, i) => (
+            {['Capture', 'Preview', 'Detect', 'Measure', 'Calculate', 'Review'].map((label, i) => (
               <div
                 key={label}
                 style={{
@@ -291,7 +291,7 @@ export default function NewScanPage() {
             ))}
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: 'var(--color-text-secondary)' }}>
-            {['Capture', 'Quality', 'Detect', 'Measure', 'Calculate', 'Review'].map((label, i) => (
+            {['Capture', 'Preview', 'Detect', 'Measure', 'Calculate', 'Review'].map((label, i) => (
               <span key={label} style={{ flex: 1, textAlign: 'center', fontWeight: i + 1 === step ? 600 : 400, color: i + 1 === step ? 'var(--color-primary)' : undefined }}>
                 {label}
               </span>
@@ -350,11 +350,11 @@ export default function NewScanPage() {
           </div>
         )}
 
-        {/* Step 2: Quality Check */}
-        {step === 2 && qualityResult && (
+        {/* Step 2: Image Preview */}
+        {step === 2 && (
           <div>
             <div className="card" style={{ marginBottom: 20 }}>
-              <h3 style={{ marginBottom: 16 }}>Image Quality Check</h3>
+              <h3 style={{ marginBottom: 16 }}>Image Preview</h3>
 
               <div style={{ marginBottom: 20 }}>
                 {imagePreview && (
@@ -363,42 +363,14 @@ export default function NewScanPage() {
               </div>
 
               <div style={{ padding: 16, background: 'var(--color-bg)', borderRadius: 8, marginBottom: 16 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                   <span style={{ fontSize: 14, fontWeight: 600 }}>Status:</span>
-                  {qualityResult.status === 'PASS' ? (
-                    <span className="badge badge-success">PASS</span>
-                  ) : qualityResult.status === 'REVIEW' ? (
-                    <span className="badge badge-warning">REVIEW</span>
-                  ) : (
-                    <span className="badge badge-error">FAIL</span>
-                  )}
+                  <span className="badge badge-success">READY FOR DETECTION</span>
                 </div>
-                <div style={{ fontSize: 14, color: 'var(--color-text-secondary)' }}>
-                  Resolution: {qualityResult.width} × {qualityResult.height} pixels
+                <div style={{ fontSize: 14, color: 'var(--color-text-secondary)', marginTop: 8 }}>
+                  Image loaded. The computer vision engine will measure reaction-front distance relative to printed fiducials.
                 </div>
               </div>
-
-              {qualityResult.errors.length > 0 && (
-                <div className="alert alert-error" style={{ marginBottom: 16 }}>
-                  <AlertTriangle size={18} />
-                  <div>
-                    {qualityResult.errors.map((err, i) => (
-                      <div key={i}>{err}</div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {qualityResult.warnings.length > 0 && (
-                <div className="alert alert-warning" style={{ marginBottom: 16 }}>
-                  <AlertTriangle size={18} />
-                  <div>
-                    {qualityResult.warnings.map((warn, i) => (
-                      <div key={i}>{warn}</div>
-                    ))}
-                  </div>
-                </div>
-              )}
 
               <div style={{ display: 'flex', gap: 12 }}>
                 <button
