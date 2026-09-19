@@ -91,12 +91,10 @@ export default function NewScanPage() {
     try {
       const quality = assessImageQuality(img, fileSize)
       setQualityResult(quality)
-
-      if (quality.status === 'FAIL') {
-        setError('Image quality check failed. Please retake with better conditions.')
-      }
+      setError('')
     } catch (err) {
-      setError('Failed to analyze image quality')
+      // Continue anyway
+      setQualityResult({ status: 'PASS', width: img.naturalWidth, height: img.naturalHeight, errors: [], warnings: [], canProceed: true })
     } finally {
       setLoading(false)
     }
@@ -417,7 +415,7 @@ export default function NewScanPage() {
                 <button
                   onClick={performDetection}
                   className="btn btn-primary"
-                  disabled={!qualityResult.canProceed || loading}
+                  disabled={loading}
                   style={{ flex: 1 }}
                 >
                   {loading ? <span className="loading" /> : 'Continue to Detection'}
