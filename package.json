@@ -1,0 +1,26 @@
+{
+  "name": "aegis-band-v2",
+  "version": "2.0.0",
+  "private": true,
+  "description": "AEGIS-BAND v2: Passive H₂S Dosimetry Wristband - Web Platform & CV Engine",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "test": "node --test tests/**/*.test.js"
+  },
+  "dependencies": {
+    "@supabase/ssr": "^0.5.2",
+    "@supabase/supabase-js": "^2.48.1",
+    "clsx": "^2.1.1",
+    "lucide-react": "^0.468.0",
+    "next": "14.2.20",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "eslint": "^8.57.1",
+    "eslint-config-next": "14.2.20"
+  }
+}
