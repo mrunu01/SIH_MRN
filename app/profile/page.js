@@ -4,10 +4,9 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { User, Mail, Building, Hash, Save, ArrowLeft } from 'lucide-react'
 import Navbar from '@/components/Navbar'
-import { createClient } from '@/lib/supabase/client'
+import { getProfile, saveProfile } from '@/lib/storage/localStorage'
 
 export default function ProfilePage() {
-  const [user, setUser] = useState(null)
   const [profile, setProfile] = useState(null)
   const [formData, setFormData] = useState({
     full_name: '',
@@ -18,39 +17,19 @@ export default function ProfilePage() {
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState('')
   const router = useRouter()
-  const supabase = createClient()
 
   useEffect(() => {
-    const loadProfile = async () => {
-      const { data: { user } } = await supabase.auth.getUser()
-
-      if (!user) {
-        router.push('/login')
-        return
-      }
-
-      setUser(user)
-
-      const { data: profileData } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', user.id)
-        .single()
-
-      if (profileData) {
-        setProfile(profileData)
-        setFormData({
-          full_name: profileData.full_name || '',
-          organization: profileData.organization || '',
-          worker_id: profileData.worker_id || '',
-        })
-      }
-
-      setLoading(false)
+    const profileData = getProfile()
+    if (profileData) {
+      setProfile(profileData)
+      setFormData({
+        full_name: profileData.full_name || '',
+        organization: profileData.organization || '',
+        worker_id: profileData.worker_id || '',
+      })
     }
-
-    loadProfile()
-  }, [supabase, router])
+    setLoading(false)
+  }, [])
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -58,17 +37,13 @@ export default function ProfilePage() {
     setMessage('')
 
     try {
-      const { error } = await supabase
-        .from('profiles')
-        .update({
-          full_name: formData.full_name,
-          organization: formData.organization || null,
-          worker_id: formData.worker_id || null,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', user.id)
-
-      if (error) throw error
+      saveProfile({
+        ...profile,
+        full_name: formData.full_name,
+        organization: formData.organization || null,
+        worker_id: formData.worker_id || null,
+        updated_at: new Date().toISOString(),
+      })
 
       setMessage('Profile updated successfully')
       setTimeout(() => setMessage(''), 3000)

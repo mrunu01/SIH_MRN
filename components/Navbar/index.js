@@ -1,55 +1,31 @@
-'use client'
+﻿'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import Link from 'next/link'
-import { usePathname, useRouter } from 'next/navigation'
+import { usePathname } from 'next/navigation'
 import {
   Home,
   Camera,
   History,
   BookOpen,
   User,
-  LogOut,
   Menu,
   X,
-  Shield
+  Shield,
+  LayoutDashboard
 } from 'lucide-react'
-import { createClient } from '@/lib/supabase/client'
 
 export default function Navbar() {
   const [isOpen, setIsOpen] = useState(false)
-  const [user, setUser] = useState(null)
   const pathname = usePathname()
-  const router = useRouter()
-  const supabase = createClient()
 
-  useEffect(() => {
-    const getUser = async () => {
-      const { data: { user } } = await supabase.auth.getUser()
-      setUser(user)
-    }
-    getUser()
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null)
-    })
-
-    return () => subscription.unsubscribe()
-  }, [supabase])
-
-  const handleLogout = async () => {
-    await supabase.auth.signOut()
-    router.push('/login')
-  }
-
-  const navItems = user ? [
-    { href: '/dashboard', label: 'Dashboard', icon: Home },
+  const navItems = [
+    { href: '/', label: 'Home', icon: Home },
+    { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { href: '/new-scan', label: 'New Scan', icon: Camera },
     { href: '/history', label: 'History', icon: History },
     { href: '/methodology', label: 'Methodology', icon: BookOpen },
-  ] : [
-    { href: '/', label: 'Home', icon: Home },
-    { href: '/methodology', label: 'Methodology', icon: BookOpen },
+    { href: '/profile', label: 'Profile', icon: User },
   ]
 
   const isActive = (href) => pathname === href
@@ -70,7 +46,7 @@ export default function Navbar() {
           height: 64,
         }}>
           {/* Logo */}
-          <Link href={user ? '/dashboard' : '/'} style={{
+          <Link href="/dashboard" style={{
             display: 'flex',
             alignItems: 'center',
             gap: 10,
@@ -93,7 +69,7 @@ export default function Navbar() {
           </Link>
 
           {/* Desktop Navigation */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             {navItems.map((item) => (
               <Link
                 key={item.href}
@@ -102,7 +78,7 @@ export default function Navbar() {
                   display: 'inline-flex',
                   alignItems: 'center',
                   gap: 6,
-                  padding: '8px 16px',
+                  padding: '8px 14px',
                   borderRadius: 6,
                   textDecoration: 'none',
                   color: isActive(item.href) ? 'var(--color-primary)' : 'var(--color-text-secondary)',
@@ -117,51 +93,13 @@ export default function Navbar() {
               </Link>
             ))}
 
-            {user ? (
-              <>
-                <Link
-                  href="/profile"
-                  style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: 6,
-                    padding: '8px 16px',
-                    borderRadius: 6,
-                    textDecoration: 'none',
-                    color: isActive('/profile') ? 'var(--color-primary)' : 'var(--color-text-secondary)',
-                    background: isActive('/profile') ? 'rgba(0, 102, 204, 0.1)' : 'transparent',
-                    fontWeight: 500,
-                    fontSize: 14,
-                  }}
-                >
-                  <User size={16} />
-                  Profile
-                </Link>
-                <button
-                  onClick={handleLogout}
-                  style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: 6,
-                    padding: '8px 16px',
-                    borderRadius: 6,
-                    border: 'none',
-                    background: 'transparent',
-                    color: 'var(--color-text-secondary)',
-                    fontWeight: 500,
-                    fontSize: 14,
-                    cursor: 'pointer',
-                  }}
-                >
-                  <LogOut size={16} />
-                  Logout
-                </button>
-              </>
-            ) : (
-              <Link href="/login" className="btn btn-primary btn-sm">
-                Login
-              </Link>
-            )}
+            <Link
+              href="/new-scan"
+              className="btn btn-primary btn-sm"
+              style={{ marginLeft: 8 }}
+            >
+              <Camera size={14} /> Scan Now
+            </Link>
           </div>
 
           {/* Mobile Menu Button */}
@@ -206,68 +144,6 @@ export default function Navbar() {
                 {item.label}
               </Link>
             ))}
-
-            {user ? (
-              <>
-                <Link
-                  href="/profile"
-                  onClick={() => setIsOpen(false)}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 12,
-                    padding: '12px 0',
-                    textDecoration: 'none',
-                    color: 'var(--color-text)',
-                    fontWeight: 500,
-                  }}
-                >
-                  <User size={18} />
-                  Profile
-                </Link>
-                <button
-                  onClick={() => {
-                    setIsOpen(false)
-                    handleLogout()
-                  }}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 12,
-                    padding: '12px 0',
-                    width: '100%',
-                    border: 'none',
-                    background: 'transparent',
-                    color: 'var(--color-text)',
-                    fontWeight: 500,
-                    fontSize: '1rem',
-                    cursor: 'pointer',
-                  }}
-                >
-                  <LogOut size={18} />
-                  Logout
-                </button>
-              </>
-            ) : (
-              <Link
-                href="/login"
-                onClick={() => setIsOpen(false)}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  padding: '12px',
-                  marginTop: 12,
-                  background: 'var(--color-primary)',
-                  color: '#fff',
-                  borderRadius: 8,
-                  textDecoration: 'none',
-                  fontWeight: 600,
-                }}
-              >
-                Login
-              </Link>
-            )}
           </div>
         )}
       </div>

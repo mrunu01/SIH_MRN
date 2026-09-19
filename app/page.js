@@ -1,9 +1,11 @@
 import Link from 'next/link'
-import { ArrowRight, Shield, Camera, Database, AlertTriangle } from 'lucide-react'
+import { ArrowRight, Shield, Camera, Database, AlertTriangle, LayoutDashboard } from 'lucide-react'
+import Navbar from '@/components/Navbar'
 
 export default function LandingPage() {
   return (
     <div style={{ minHeight: '100vh' }}>
+      <Navbar />
       {/* Hero Section */}
       <header style={{
         background: 'linear-gradient(135deg, #0a1628 0%, #1a365d 50%, #0066cc 100%)',
@@ -54,7 +56,7 @@ export default function LandingPage() {
           </p>
 
           <div style={{ display: 'flex', gap: 16, justifyContent: 'center', flexWrap: 'wrap' }}>
-            <Link href="/signup" style={{
+            <Link href="/new-scan" style={{
               display: 'inline-flex',
               alignItems: 'center',
               gap: 8,
@@ -65,9 +67,9 @@ export default function LandingPage() {
               fontWeight: 600,
               textDecoration: 'none',
             }}>
-              Create Account <ArrowRight size={18} />
+              <Camera size={20} /> Launch Scanner
             </Link>
-            <Link href="/login" style={{
+            <Link href="/dashboard" style={{
               display: 'inline-flex',
               alignItems: 'center',
               gap: 8,
@@ -79,7 +81,7 @@ export default function LandingPage() {
               fontWeight: 600,
               textDecoration: 'none',
             }}>
-              Login
+              <LayoutDashboard size={20} /> View Dashboard
             </Link>
           </div>
         </div>
@@ -226,12 +228,12 @@ export default function LandingPage() {
 
         {/* CTA */}
         <section style={{ textAlign: 'center', padding: '40px 20px', background: 'var(--color-surface)', borderRadius: 12 }}>
-          <h3 style={{ marginBottom: 12 }}>Ready to get started?</h3>
+          <h3 style={{ marginBottom: 12 }}>Ready to scan an AEGIS-BAND?</h3>
           <p style={{ color: 'var(--color-text-secondary)', marginBottom: 24 }}>
-            Create your account to begin tracking H₂S exposure with AEGIS-BAND v2.
+            Take a photo of any exposure wristband to calculate accumulated H₂S dose immediately.
           </p>
-          <Link href="/signup" className="btn btn-primary btn-lg">
-            Create Free Account <ArrowRight size={18} />
+          <Link href="/new-scan" className="btn btn-primary btn-lg">
+            <Camera size={20} /> Launch Scanner Now
           </Link>
         </section>
 

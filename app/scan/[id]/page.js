@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { ArrowLeft, Calendar, Clock, AlertTriangle, CheckCircle, XCircle, Download, Trash2, Image as ImageIcon } from 'lucide-react'
 import Navbar from '@/components/Navbar'
-import { createClient } from '@/lib/supabase/client'
+import { getScanById, deleteScan } from '@/lib/storage/localStorage'
 import { PROJECT_CONFIG } from '@/lib/config/project'
 
 export default function ScanDetailPage({ params }) {
@@ -16,98 +16,38 @@ export default function ScanDetailPage({ params }) {
   const [deleting, setDeleting] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const router = useRouter()
-  const supabase = createClient()
 
   useEffect(() => {
     const loadScan = async () => {
       const resolvedParams = await params
       const scanId = resolvedParams.id
 
-      const { data: { user } } = await supabase.auth.getUser()
-
-      if (!user) {
-        router.push('/login')
-        return
-      }
-
-      // Load scan with related data
-      const { data: scanData, error: scanError } = await supabase
-        .from('scans')
-        .select(`
-          *,
-          scan_measurements (*),
-          scan_analysis (*)
-        `)
-        .eq('id', scanId)
-        .eq('user_id', user.id)
-        .single()
-
-      if (scanError || !scanData) {
-        console.error('Error loading scan:', scanError)
+      const scanData = getScanById(scanId)
+      if (!scanData) {
         router.push('/history')
         return
       }
 
       setScan(scanData)
-      setMeasurement(scanData.scan_measurements[0])
-      setAnalysis(scanData.scan_analysis[0])
+      setMeasurement(scanData.scan_measurements?.[0] || null)
+      setAnalysis(scanData.scan_analysis?.[0] || null)
 
-      // Load images from storage
-      if (scanData.original_image_path) {
-        const { data: { signedUrl } } = await supabase.storage
-          .from('scan-images')
-          .createSignedUrl(scanData.original_image_path, 3600)
-
-        if (signedUrl) {
-          setImageUrls(prev => ({ ...prev, original: signedUrl }))
-        }
-      }
-
-      if (scanData.processed_image_path) {
-        const { data: { signedUrl } } = await supabase.storage
-          .from('scan-images')
-          .createSignedUrl(scanData.processed_image_path, 3600)
-
-        if (signedUrl) {
-          setImageUrls(prev => ({ ...prev, processed: signedUrl }))
-        }
-      }
+      setImageUrls({
+        original: scanData.original_image_path || null,
+        processed: scanData.processed_image_path || null,
+      })
 
       setLoading(false)
     }
 
     loadScan()
-  }, [params, supabase, router])
+  }, [params, router])
 
-  const handleDelete = async () => {
+  const handleDelete = () => {
     if (!scan) return
-
     setDeleting(true)
-
-    try {
-      // Delete images from storage
-      if (scan.original_image_path) {
-        await supabase.storage.from('scan-images').remove([scan.original_image_path])
-      }
-      if (scan.processed_image_path) {
-        await supabase.storage.from('scan-images').remove([scan.processed_image_path])
-      }
-
-      // Delete scan (cascade will handle related records)
-      const { error } = await supabase
-        .from('scans')
-        .delete()
-        .eq('id', scan.id)
-
-      if (error) throw error
-
-      router.push('/history')
-    } catch (error) {
-      console.error('Delete error:', error)
-      alert('Failed to delete scan')
-    } finally {
-      setDeleting(false)
-    }
+    deleteScan(scan.id)
+    router.push('/history')
   }
 
   if (loading) {

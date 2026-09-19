@@ -5,60 +5,21 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Camera, History, AlertTriangle, CheckCircle, XCircle, Clock, ArrowRight } from 'lucide-react'
 import Navbar from '@/components/Navbar'
-import { createClient } from '@/lib/supabase/client'
+import { getAllScans, getProfile } from '@/lib/storage/localStorage'
 
 export default function DashboardPage() {
-  const [user, setUser] = useState(null)
   const [profile, setProfile] = useState(null)
   const [scans, setScans] = useState([])
   const [loading, setLoading] = useState(true)
   const router = useRouter()
-  const supabase = createClient()
 
   useEffect(() => {
-    const loadData = async () => {
-      const { data: { user } } = await supabase.auth.getUser()
-
-      if (!user) {
-        router.push('/login')
-        return
-      }
-
-      setUser(user)
-
-      // Load profile
-      const { data: profileData } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', user.id)
-        .single()
-
-      setProfile(profileData)
-
-      // Load recent scans
-      const { data: scansData } = await supabase
-        .from('scans')
-        .select(`
-          id,
-          band_id,
-          captured_at,
-          status,
-          integrity_status,
-          scan_measurements (
-            dose_ppm_hr,
-            confidence_score
-          )
-        `)
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false })
-        .limit(10)
-
-      setScans(scansData || [])
-      setLoading(false)
-    }
-
-    loadData()
-  }, [supabase, router])
+    const userProfile = getProfile()
+    const localScans = getAllScans()
+    setProfile(userProfile)
+    setScans(localScans)
+    setLoading(false)
+  }, [])
 
   if (loading) {
     return (

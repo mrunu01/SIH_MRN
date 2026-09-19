@@ -62,8 +62,8 @@ export default function AboutPage() {
             <li><strong>Smartphone Readout:</strong> Uses existing phone camera — no specialized hardware</li>
             <li><strong>Ratiometric Correction:</strong> Lane A/B ratio compensates for humidity effects</li>
             <li><strong>Fail-Closed Safety:</strong> Lane R integrity check prevents false readings</li>
-            <li><strong>Digital Records:</strong> Secure cloud storage with full audit trails</li>
-            <li><strong>EHS Integration:</strong> Three-tier architecture for enterprise monitoring</li>
+            <li><strong>Digital Records:</strong> Persistent local storage with instant retrieval</li>
+            <li><strong>Privacy First:</strong> All image processing and dosimetry data remain on your local machine</li>
           </ul>
         </section>
 
@@ -100,14 +100,11 @@ export default function AboutPage() {
           <h2>Technology Stack</h2>
           <div style={{ display: 'grid', gap: 12 }}>
             <TechItem label="Frontend" value="Next.js 14 (App Router), React 18" />
-            <TechItem label="Styling" value="CSS Modules, Responsive Design" />
-            <TechItem label="Backend" value="Next.js Route Handlers, Vercel Functions" />
-            <TechItem label="Database" value="Supabase PostgreSQL" />
-            <TechItem label="Authentication" value="Supabase Auth" />
-            <TechItem label="Storage" value="Supabase Storage (Private)" />
-            <TechItem label="Computer Vision" value="Browser Canvas API, Edge Detection" />
-            <TechItem label="Security" value="Row Level Security (RLS), Environment Variables" />
-            <TechItem label="Deployment" value="Vercel" />
+            <TechItem label="Styling" value="Modern CSS, Responsive Design" />
+            <TechItem label="Storage" value="Browser LocalStorage (Zero Cloud Dependency)" />
+            <TechItem label="Computer Vision" value="HTML5 Canvas API, Spatial Edge Detection" />
+            <TechItem label="Data Security" value="100% Private, Local-Only Data Storage" />
+            <TechItem label="Runtime" value="Node.js Local Server" />
           </div>
         </section>
 

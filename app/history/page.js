@@ -4,10 +4,9 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { History as HistoryIcon, Search, Filter, Calendar, ArrowRight, CheckCircle, XCircle, AlertTriangle } from 'lucide-react'
 import Navbar from '@/components/Navbar'
-import { createClient } from '@/lib/supabase/client'
+import { getAllScans } from '@/lib/storage/localStorage'
 
 export default function HistoryPage() {
-  const [user, setUser] = useState(null)
   const [scans, setScans] = useState([])
   const [filteredScans, setFilteredScans] = useState([])
   const [loading, setLoading] = useState(true)
@@ -16,52 +15,13 @@ export default function HistoryPage() {
   const [integrityFilter, setIntegrityFilter] = useState('all')
   const [sortBy, setSortBy] = useState('newest')
   const router = useRouter()
-  const supabase = createClient()
 
   useEffect(() => {
-    const loadData = async () => {
-      const { data: { user } } = await supabase.auth.getUser()
-
-      if (!user) {
-        router.push('/login')
-        return
-      }
-
-      setUser(user)
-
-      // Load all scans with measurements
-      const { data: scansData, error } = await supabase
-        .from('scans')
-        .select(`
-          id,
-          band_id,
-          captured_at,
-          status,
-          integrity_status,
-          notes,
-          created_at,
-          scan_measurements (
-            dose_ppm_hr,
-            confidence_score,
-            lane_a_length_mm,
-            lane_b_length_mm
-          )
-        `)
-        .eq('user_id', user.id)
-        .order('captured_at', { ascending: false })
-
-      if (error) {
-        console.error('Error loading scans:', error)
-      } else {
-        setScans(scansData || [])
-        setFilteredScans(scansData || [])
-      }
-
-      setLoading(false)
-    }
-
-    loadData()
-  }, [supabase, router])
+    const localScans = getAllScans()
+    setScans(localScans)
+    setFilteredScans(localScans)
+    setLoading(false)
+  }, [])
 
   useEffect(() => {
     let result = [...scans]
