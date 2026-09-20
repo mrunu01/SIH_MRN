@@ -124,7 +124,13 @@ The platform opens **directly** to the full system — no login screen or passwo
 - **Lane R Verification:** Confirms whether the band was intact and uncompromised.
 - **Mathematical Breakdown:** Full formula transparency (`Dose = Length_A × 0.2285714 × R`) displayed with all intermediate variables.
 
-### 5. Save & Manage Records
+### 5. Automated Vision AI Metrology (Groq / Gemini)
+- **High-Precision Ruler Reading:** Automatically identifies the printed 0 to 50 mm common scale and reads the stain front positions for Strip 1, Strip 2, and Strip 3 without manual box alignment.
+- **Easy Setup:** Enter your free Groq API key (`gsk_...`) or Gemini key (`AIza...`) directly in the app UI, or set `GROQ_API_KEY` in `.env.local` / Render environment variables.
+- **Zero Front-End Prompts:** All analytical metrology prompts and JSON schemas are pre-configured on the backend.
+- **Offline / Local Fallback:** Automatically falls back to client-side heuristic detection if no API key is provided.
+
+### 6. Save & Manage Records
 - Click **"Save Scan"** to record the measurement with both original and annotated images.
 - Scans are securely stored locally on your device in browser `localStorage`.
 - View all previous measurements in the **History** tab, filter by status, sort by date, or click any scan for a detailed breakdown.

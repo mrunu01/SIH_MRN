@@ -2,9 +2,9 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { User, Mail, Building, Hash, Save, ArrowLeft, ShieldCheck, HardDrive, Download, RotateCcw, Trash2 } from 'lucide-react'
+import { User, Mail, Building, Hash, Save, ArrowLeft, ShieldCheck, HardDrive, Download, RotateCcw, Trash2, Sparkles, Check } from 'lucide-react'
 import Navbar from '@/components/Navbar'
-import { getProfile, saveProfile, getAllScans, resetSampleScans, clearAllLocalData } from '@/lib/storage/localStorage'
+import { getProfile, saveProfile, getAllScans, resetSampleScans, clearAllLocalData, getVisionApiKey, saveVisionApiKey } from '@/lib/storage/localStorage'
 
 export default function ProfilePage() {
   const [profile, setProfile] = useState(null)
@@ -14,11 +14,28 @@ export default function ProfilePage() {
     worker_id: '',
     email: '',
   })
+  const [apiKeyInput, setApiKeyInput] = useState('')
+  const [apiKeySaved, setApiKeySaved] = useState(false)
   const [scanCount, setScanCount] = useState(0)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState('')
   const router = useRouter()
+
+  useEffect(() => {
+    setApiKeyInput(getVisionApiKey())
+  }, [])
+
+  const handleSaveApiKey = () => {
+    saveVisionApiKey(apiKeyInput)
+    setApiKeySaved(true)
+    setTimeout(() => setApiKeySaved(false), 2000)
+  }
+
+  const handleClearApiKey = () => {
+    saveVisionApiKey('')
+    setApiKeyInput('')
+  }
 
   useEffect(() => {
     const profileData = getProfile()
@@ -252,6 +269,50 @@ export default function ProfilePage() {
             )}
           </button>
         </form>
+
+        {/* Vision AI API Key Configuration */}
+        <div className="card" style={{ marginBottom: 24 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+            <Sparkles size={20} color="var(--color-primary)" />
+            <h3 style={{ margin: 0 }}>Vision AI Configuration (Groq / Gemini)</h3>
+          </div>
+          <p style={{ color: 'var(--color-text-secondary)', fontSize: 14, marginBottom: 16, lineHeight: 1.5 }}>
+            Configure your free <strong>Groq API key</strong> (starts with <code>gsk_</code>) or <strong>Gemini key</strong> (starts with <code>AIza</code>). This enables automated, high-precision millimeter readings of the watch badge ruler without manual line adjustments.
+          </p>
+
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 12 }}>
+            <input
+              type="password"
+              className="form-input"
+              placeholder="gsk_... or AIza..."
+              value={apiKeyInput}
+              onChange={(e) => setApiKeyInput(e.target.value)}
+              style={{ flex: 1, minWidth: 260, fontFamily: 'monospace', fontSize: 14 }}
+            />
+            <button
+              type="button"
+              onClick={handleSaveApiKey}
+              className="btn btn-primary"
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+            >
+              {apiKeySaved ? <><Check size={16} /> Saved!</> : 'Save Key'}
+            </button>
+            {apiKeyInput && (
+              <button
+                type="button"
+                onClick={handleClearApiKey}
+                className="btn btn-secondary"
+                style={{ color: '#ef4444' }}
+              >
+                Remove
+              </button>
+            )}
+          </div>
+
+          <div style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>
+            Status: {apiKeyInput ? <span style={{ color: '#10b981', fontWeight: 600 }}>● Active & Stored in Local Storage</span> : <span style={{ color: 'var(--color-text-secondary)' }}>○ Not configured (running in local CV mode)</span>}
+          </div>
+        </div>
 
         {/* Local Data Management */}
         <div className="card">
