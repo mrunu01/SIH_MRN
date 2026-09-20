@@ -6,29 +6,35 @@ import { useRouter } from 'next/navigation'
 import { Camera, History, AlertTriangle, CheckCircle, XCircle, Clock, ArrowRight } from 'lucide-react'
 import Navbar from '@/components/Navbar'
 import { getAllScans, getProfile, fetchCloudScans } from '@/lib/storage/localStorage'
+import { useAuth } from '@/lib/context/AuthContext'
 
 export default function DashboardPage() {
+  const { user, profile: authProfile, loading: authLoading } = useAuth()
   const [profile, setProfile] = useState(null)
   const [scans, setScans] = useState([])
   const [loading, setLoading] = useState(true)
   const router = useRouter()
 
   useEffect(() => {
-    const userProfile = getProfile()
-    const localScans = getAllScans()
-    setProfile(userProfile)
-    setScans(localScans)
-    setLoading(false)
+    if (!authLoading && !user) {
+      router.push('/')
+      return
+    }
 
-    // Load latest scans from Supabase Cloud
-    fetchCloudScans().then((cloudScans) => {
-      if (cloudScans && cloudScans.length > 0) {
-        setScans(cloudScans)
-      }
-    })
-  }, [])
+    if (user) {
+      const userProfile = authProfile || getProfile()
+      setProfile(userProfile)
+      setScans(getAllScans())
+      setLoading(false)
 
-  if (loading) {
+      // Load user's private scans from Supabase Cloud
+      fetchCloudScans().then((cloudScans) => {
+        setScans(cloudScans || [])
+      })
+    }
+  }, [user, authProfile, authLoading, router])
+
+  if (authLoading || loading) {
     return (
       <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <div className="loading" style={{ width: 40, height: 40 }}></div>

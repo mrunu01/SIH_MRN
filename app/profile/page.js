@@ -4,9 +4,11 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { User, Mail, Building, Hash, Save, ArrowLeft, ShieldCheck, HardDrive, Download, RotateCcw, Trash2 } from 'lucide-react'
 import Navbar from '@/components/Navbar'
-import { getProfile, saveProfile, getAllScans, resetSampleScans, clearAllLocalData } from '@/lib/storage/localStorage'
+import { getProfile, saveProfile, getAllScans, fetchCloudScans, resetSampleScans, clearAllLocalData } from '@/lib/storage/localStorage'
+import { useAuth } from '@/lib/context/AuthContext'
 
 export default function ProfilePage() {
+  const { user, profile: authProfile, loading: authLoading } = useAuth()
   const [profile, setProfile] = useState(null)
   const [formData, setFormData] = useState({
     full_name: '',
@@ -21,20 +23,27 @@ export default function ProfilePage() {
   const router = useRouter()
 
   useEffect(() => {
-    const profileData = getProfile()
-    if (profileData) {
+    if (!authLoading && !user) {
+      router.push('/')
+      return
+    }
+
+    if (user) {
+      const profileData = authProfile || getProfile()
       setProfile(profileData)
       setFormData({
-        full_name: profileData.full_name || '',
-        organization: profileData.organization || '',
-        worker_id: profileData.worker_id || '',
-        email: profileData.email || 'operator@irisathenas.local',
+        full_name: profileData?.full_name || '',
+        organization: profileData?.organization || 'Irisathenas Plant Safety',
+        worker_id: profileData?.worker_id || '',
+        email: user.email || '',
       })
+
+      fetchCloudScans().then((scans) => {
+        setScanCount(scans ? scans.length : 0)
+      })
+      setLoading(false)
     }
-    const scans = getAllScans()
-    setScanCount(scans.length)
-    setLoading(false)
-  }, [])
+  }, [user, authProfile, authLoading, router])
 
   const handleSubmit = async (e) => {
     e.preventDefault()

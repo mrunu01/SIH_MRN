@@ -20,8 +20,13 @@ import {
   Ruler,
   SwitchCamera,
   ShieldCheck,
+  MapPin,
+  CloudRain,
+  Thermometer,
 } from 'lucide-react'
 import Navbar from '@/components/Navbar'
+import { useAuth } from '@/lib/context/AuthContext'
+import { getLiveEnvironmentalData } from '@/lib/services/weatherService'
 import { saveScan as saveScanToStorage } from '@/lib/storage/localStorage'
 import { BandDetector } from '@/lib/analysis/bandDetection'
 import { calculateExposureDose } from '@/lib/analysis/doseCalculation'
@@ -29,6 +34,10 @@ import { assessImageQuality, validateFileType, validateFileSize } from '@/lib/an
 import { PROJECT_CONFIG } from '@/lib/config/project'
 
 export default function NewScanPage() {
+  const { user, loading: authLoading } = useAuth()
+  const [liveWeather, setLiveWeather] = useState(null)
+  const [weatherLoading, setWeatherLoading] = useState(false)
+  const [weatherNotice, setWeatherNotice] = useState('')
   const [step, setStep] = useState(1) // 1: capture, 2: preview, 3: detection, 4: correction, 5: measurement, 6: calculation, 7: review
   const [imageFile, setImageFile] = useState(null)
   const [imagePreview, setImagePreview] = useState(null)
@@ -62,6 +71,38 @@ export default function NewScanPage() {
   const videoRef = useRef(null)
   const cameraStreamRef = useRef(null)
   const router = useRouter()
+
+  // Auth protection & Live Environmental GPS Weather Auto-Detection
+  useEffect(() => {
+    if (!authLoading && !user) {
+      router.push('/')
+      return
+    }
+
+    if (user && !liveWeather && !weatherLoading) {
+      detectLiveEnvironment()
+    }
+  }, [user, authLoading, router])
+
+  const detectLiveEnvironment = async () => {
+    setWeatherLoading(true)
+    setWeatherNotice('')
+    try {
+      const data = await getLiveEnvironmentalData()
+      setLiveWeather(data)
+      setScanData((prev) => ({
+        ...prev,
+        temperatureC: data.temperatureC.toString(),
+        relativeHumidity: data.relativeHumidity.toString(),
+      }))
+      setWeatherNotice(`Auto-detected live conditions: ${data.temperatureC}°C, ${data.relativeHumidity}% RH (GPS Coords: ${data.latitude}°N, ${data.longitude}°E)`)
+    } catch (err) {
+      console.warn('Weather detection:', err.message)
+      setWeatherNotice(err.message)
+    } finally {
+      setWeatherLoading(false)
+    }
+  }
 
   // Clean up camera stream on unmount
   useEffect(() => {
@@ -524,6 +565,14 @@ export default function NewScanPage() {
       setError(err.message || 'Failed to save scan')
       setLoading(false)
     }
+  }
+
+  if (authLoading || !user) {
+    return (
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--color-bg)' }}>
+        <div className="loading" style={{ width: 40, height: 40 }}></div>
+      </div>
+    )
   }
 
   return (
@@ -1348,8 +1397,82 @@ export default function NewScanPage() {
                   />
                 </div>
 
+                {/* Live GPS Environmental Sensor Card */}
+                <div style={{
+                  gridColumn: '1 / -1',
+                  background: 'rgba(0, 102, 204, 0.08)',
+                  border: '1px solid rgba(0, 102, 204, 0.35)',
+                  borderRadius: 10,
+                  padding: 16,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  flexWrap: 'wrap',
+                  gap: 12,
+                  marginBottom: 10,
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <div style={{
+                      width: 44,
+                      height: 44,
+                      borderRadius: 8,
+                      background: 'rgba(0, 102, 204, 0.18)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: 'var(--color-primary)',
+                      flexShrink: 0,
+                    }}>
+                      <MapPin size={22} />
+                    </div>
+                    <div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <strong style={{ fontSize: 14 }}>Live Environmental Sensors (GPS-Synced)</strong>
+                        {liveWeather && (
+                          <span style={{
+                            fontSize: 10,
+                            padding: '2px 8px',
+                            borderRadius: 12,
+                            background: 'rgba(16, 185, 129, 0.15)',
+                            color: '#10b981',
+                            fontWeight: 700,
+                            border: '1px solid rgba(16, 185, 129, 0.3)',
+                          }}>
+                            ● GPS LIVE
+                          </span>
+                        )}
+                      </div>
+                      <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginTop: 3 }}>
+                        {liveWeather ? (
+                          <span>
+                            Real-time: <strong style={{ color: '#60a5fa' }}>{liveWeather.temperatureC}°C</strong> | <strong style={{ color: '#60a5fa' }}>{liveWeather.relativeHumidity}% RH</strong> | Lat: {liveWeather.latitude}° Lon: {liveWeather.longitude}°
+                          </span>
+                        ) : weatherLoading ? (
+                          <span>🛰️ Querying device GPS & live atmospheric sensors...</span>
+                        ) : (
+                          <span>Automatically retrieves live ambient temperature and humidity for ASTM D4599 diffusion compensation.</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={detectLiveEnvironment}
+                    disabled={weatherLoading}
+                    className="btn btn-secondary btn-sm"
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12 }}
+                  >
+                    <RefreshCw size={13} className={weatherLoading ? 'spinning' : ''} />
+                    {weatherLoading ? 'Detecting...' : liveWeather ? 'Refresh Live GPS' : 'Detect Live Weather'}
+                  </button>
+                </div>
+
                 <div className="form-group">
-                  <label className="form-label">Temperature (°C, Optional)</label>
+                  <label className="form-label">
+                    Temperature (°C)
+                    {liveWeather && <span style={{ color: '#10b981', fontSize: 11, marginLeft: 6 }}>● Live GPS Active</span>}
+                  </label>
                   <input
                     type="number"
                     step="0.1"
@@ -1361,7 +1484,10 @@ export default function NewScanPage() {
                 </div>
 
                 <div className="form-group">
-                  <label className="form-label">Humidity (% RH, Optional)</label>
+                  <label className="form-label">
+                    Humidity (% RH)
+                    {liveWeather && <span style={{ color: '#10b981', fontSize: 11, marginLeft: 6 }}>● Live GPS Active</span>}
+                  </label>
                   <input
                     type="number"
                     step="1"

@@ -5,8 +5,10 @@ import { useRouter } from 'next/navigation'
 import { History as HistoryIcon, Search, Filter, Calendar, ArrowRight, CheckCircle, XCircle, AlertTriangle } from 'lucide-react'
 import Navbar from '@/components/Navbar'
 import { getAllScans, fetchCloudScans } from '@/lib/storage/localStorage'
+import { useAuth } from '@/lib/context/AuthContext'
 
 export default function HistoryPage() {
+  const { user, loading: authLoading } = useAuth()
   const [scans, setScans] = useState([])
   const [filteredScans, setFilteredScans] = useState([])
   const [loading, setLoading] = useState(true)
@@ -17,19 +19,24 @@ export default function HistoryPage() {
   const router = useRouter()
 
   useEffect(() => {
-    const localScans = getAllScans()
-    setScans(localScans)
-    setFilteredScans(localScans)
-    setLoading(false)
+    if (!authLoading && !user) {
+      router.push('/')
+      return
+    }
 
-    // Load latest scans from Supabase Cloud
-    fetchCloudScans().then((cloudScans) => {
-      if (cloudScans && cloudScans.length > 0) {
-        setScans(cloudScans)
-        setFilteredScans(cloudScans)
-      }
-    })
-  }, [])
+    if (user) {
+      const localScans = getAllScans()
+      setScans(localScans)
+      setFilteredScans(localScans)
+      setLoading(false)
+
+      // Load latest user scans from Supabase Cloud
+      fetchCloudScans().then((cloudScans) => {
+        setScans(cloudScans || [])
+        setFilteredScans(cloudScans || [])
+      })
+    }
+  }, [user, authLoading, router])
 
   useEffect(() => {
     let result = [...scans]
