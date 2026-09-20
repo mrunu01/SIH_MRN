@@ -4,32 +4,25 @@ import { VISION_API_KEY, GROQ_MODEL, GEMINI_MODEL } from '@/lib/config/vision'
 export const dynamic = 'force-dynamic'
 export const maxDuration = 30 // Allow up to 30s timeout on serverless if needed
 
-const SYSTEM_VISION_PROMPT = `You are an expert optical metrology instrument reader and analytical chemist.
-Analyze this image of an Irisathenas Band passive dosimetry wristband badge.
+const SYSTEM_VISION_PROMPT = `You are a high-precision optical metrology instrument reader.
+Look closely at the 3 horizontal strips inside the watch face and the millimeter ruler (0 to 30 mm / 50 mm common scale) directly below them.
+Each strip has a colored gradient bar (purple to yellow) extending from the left starting mark (0 mm) to a specific point on the ruler.
 
-Visual Structure of the Badge:
-1. Watch Face / Display: Inside the watch dial are 3 horizontal chemical reaction strips stacked vertically.
-2. Common Length Scale: Printed underneath the strips at the bottom is a common millimeter length scale with markings: 0, 5, 10, 15, 20, 25, 30, up to 50 mm.
-3. Strip 1 (Top): "High Humident" (H2S dose channel). The chemical shifts color from purple (unreacted Cu-PAN) to yellow/amber (reacted H-PAN).
-4. Strip 2 (Middle): "Low Humident" (ambient humidity correction channel).
-5. Strip 3 (Bottom, directly above ruler): "Integrity" poka-yoke strip. Default status is PASS unless stained/broken.
+Examine the right edge of each strip's gradient bar by projecting straight down to the printed ruler ticks:
+1. Strip 1 (High Humident - Top Strip): Examine the right edge of this colored bar against the ruler ticks. (e.g. 15.0 mm).
+2. Strip 2 (Low Humident - Middle Strip): Examine the right edge of this colored bar against the ruler ticks. (e.g. 10.0 mm).
+3. Strip 3 (Integrity - Bottom Strip): Examine the right edge of this colored bar against the ruler ticks. (e.g. 20.0 mm).
+4. Integrity status: PASS if the badge is intact and sealed, FAIL if compromised.
 
-Your task:
-- Locate the printed millimeter numbers (0, 5, 10, 15, 20, 25, 30, ...) on the common length scale at the bottom of the dial.
-- Strip 1: Look at where the reacted yellow/amber front meets the unreacted purple. Project vertically down to the printed ruler scale and read the exact millimeter value (between 0.0 and 50.0 mm).
-- Strip 2: Look at the reaction front for Low Humident. Project vertically down to the ruler and read the exact millimeter value (between 0.0 and 50.0 mm).
-- Strip 3: Project to the ruler and read the length in millimeters. Determine if integrity status is "PASS" or "FAIL".
-- Tilt: Estimate the tilt angle of the watch face in degrees (-90 to +90, where 0 is level).
-
-You MUST respond ONLY with a valid JSON object matching this exact schema:
+Respond ONLY with a valid JSON object matching this exact schema:
 {
   "laneA_mm": <number between 0.0 and 50.0>,
   "laneB_mm": <number between 0.0 and 50.0>,
   "laneR_mm": <number between 0.0 and 50.0>,
   "integrity_status": "PASS" or "FAIL",
-  "tilt_angle_deg": <number between -90.0 and 90.0>,
+  "tilt_angle_deg": 0.0,
   "confidence": <number between 0.5 and 1.0>,
-  "notes": "<short note explaining the ruler reading observed>"
+  "notes": "<explain the millimeter tick reading for each strip>"
 }`
 
 export async function POST(req) {
@@ -112,7 +105,7 @@ export async function POST(req) {
 }
 
 /**
- * Call Groq Cloud Vision (llama-3.2-11b-vision-preview)
+ * Call Groq Cloud Vision (qwen/qwen3.8-27b)
  */
 async function callGroqVision(apiKey, imageData) {
   const imageUrl = imageData.startsWith('data:')
@@ -126,7 +119,7 @@ async function callGroqVision(apiKey, imageData) {
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      model: 'llama-3.2-11b-vision-preview',
+      model: GROQ_MODEL || 'qwen/qwen3.8-27b',
       messages: [
         {
           role: 'user',
@@ -141,7 +134,7 @@ async function callGroqVision(apiKey, imageData) {
           ],
         },
       ],
-      temperature: 0.1,
+      temperature: 0.0,
       response_format: { type: 'json_object' },
     }),
   })
@@ -157,7 +150,8 @@ async function callGroqVision(apiKey, imageData) {
     throw new Error('Groq returned empty response.')
   }
 
-  return JSON.parse(content)
+  const cleanJson = content.replace(/^```json\s*/i, '').replace(/```\s*$/i, '').trim()
+  return JSON.parse(cleanJson)
 }
 
 /**
