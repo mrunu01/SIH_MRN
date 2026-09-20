@@ -20,12 +20,9 @@ import {
   Ruler,
   SwitchCamera,
   ShieldCheck,
-  Key,
-  Sparkles,
-  Check,
 } from 'lucide-react'
 import Navbar from '@/components/Navbar'
-import { saveScan as saveScanToStorage, getVisionApiKey, saveVisionApiKey } from '@/lib/storage/localStorage'
+import { saveScan as saveScanToStorage } from '@/lib/storage/localStorage'
 import { BandDetector } from '@/lib/analysis/bandDetection'
 import { calculateExposureDose } from '@/lib/analysis/doseCalculation'
 import { assessImageQuality, validateFileType, validateFileSize } from '@/lib/analysis/imageQuality'
@@ -48,14 +45,6 @@ export default function NewScanPage() {
   const [cameraFacingMode, setCameraFacingMode] = useState('environment') // 'environment' | 'user'
   const [cameraError, setCameraError] = useState('')
 
-  // Vision AI Key & Engine State
-  const [visionApiKey, setVisionApiKey] = useState('')
-  const [showKeyModal, setShowKeyModal] = useState(false)
-  const [tempKeyInput, setTempKeyInput] = useState('')
-  const [keySavedToast, setKeySavedToast] = useState(false)
-  const [visionSource, setVisionSource] = useState('')
-  const [aiNotes, setAiNotes] = useState('')
-
   const [measurements, setMeasurements] = useState(null)
   const [doseResult, setDoseResult] = useState(null)
   const [scanData, setScanData] = useState({
@@ -73,31 +62,6 @@ export default function NewScanPage() {
   const videoRef = useRef(null)
   const cameraStreamRef = useRef(null)
   const router = useRouter()
-
-  // Load saved Vision API key from localStorage
-  useEffect(() => {
-    const saved = getVisionApiKey()
-    if (saved) {
-      setVisionApiKey(saved)
-      setTempKeyInput(saved)
-    }
-  }, [])
-
-  const handleSaveApiKey = () => {
-    saveVisionApiKey(tempKeyInput)
-    setVisionApiKey(tempKeyInput.trim())
-    setKeySavedToast(true)
-    setTimeout(() => {
-      setKeySavedToast(false)
-      setShowKeyModal(false)
-    }, 1200)
-  }
-
-  const handleClearApiKey = () => {
-    saveVisionApiKey('')
-    setVisionApiKey('')
-    setTempKeyInput('')
-  }
 
   // Clean up camera stream on unmount
   useEffect(() => {
@@ -243,14 +207,13 @@ export default function NewScanPage() {
       let aiSuccess = false
       let aiResult = null
 
-      // Attempt Vision AI measurement first (Groq or Gemini)
+      // Attempt optical metrology measurement first via backend engine
       try {
         const resp = await fetch('/api/vision-measure', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             image: imagePreview,
-            apiKey: visionApiKey ? visionApiKey.trim() : undefined,
           }),
         })
 
@@ -262,7 +225,7 @@ export default function NewScanPage() {
           }
         }
       } catch (apiErr) {
-        console.warn('Vision AI API call failed or offline; falling back to local CV:', apiErr)
+        console.warn('Backend metrology engine offline; falling back to client CV:', apiErr)
       }
 
       if (aiSuccess && aiResult?.measurements) {
@@ -315,8 +278,6 @@ export default function NewScanPage() {
         setCenterOffsetX(0)
         setCenterOffsetY(0)
         setBandScale(1.0)
-        setVisionSource(aiResult.provider || 'groq')
-        setAiNotes(m.notes || '')
 
         setDetectionResult({
           success: true,
@@ -326,9 +287,6 @@ export default function NewScanPage() {
           fiducialsDetected: true,
           lanesDetected: { A: true, B: true, R: true },
           annotatedCanvas,
-          isAiVision: true,
-          provider: aiResult.provider,
-          notes: m.notes,
         })
         setMeasurements(aiMeasurements)
       } else {
@@ -340,7 +298,6 @@ export default function NewScanPage() {
         setCenterOffsetX(0)
         setCenterOffsetY(0)
         setBandScale(1.0)
-        setVisionSource('local')
 
         if (!result.measurements) {
           setError('Could not detect band measurements automatically. Manual confirmation available below.')
@@ -537,105 +494,10 @@ export default function NewScanPage() {
           <ArrowLeft size={16} /> Back to Dashboard
         </Link>
 
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 14, marginBottom: 28 }}>
-          <div>
-            <h1 style={{ marginBottom: 6 }}>New Scan</h1>
-            <p style={{ color: 'var(--color-text-secondary)', margin: 0, fontSize: 14 }}>
-              Automated watch face analysis & 0–50 mm common scale dosimetry
-            </p>
-          </div>
-
-          {/* Quick Vision AI Key Toggle Button */}
-          <div>
-            <button
-              onClick={() => setShowKeyModal(!showKeyModal)}
-              className="btn btn-secondary"
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 8,
-                fontSize: 13,
-                padding: '8px 16px',
-                border: visionApiKey ? '1.5px solid #10b981' : '1px solid var(--color-border)',
-                background: visionApiKey ? 'rgba(16, 185, 129, 0.09)' : undefined,
-                cursor: 'pointer',
-              }}
-            >
-              <Sparkles size={16} color={visionApiKey ? '#10b981' : 'var(--color-primary)'} />
-              <span>
-                {visionApiKey ? (
-                  <>Vision AI: <strong style={{ color: '#10b981' }}>Connected</strong></>
-                ) : (
-                  'Connect Vision AI (Groq/Gemini)'
-                )}
-              </span>
-              <Key size={14} style={{ opacity: 0.7 }} />
-            </button>
-          </div>
-        </div>
-
-        {/* API Key Modal / Dropdown Card */}
-        {showKeyModal && (
-          <div className="card" style={{
-            marginBottom: 28,
-            padding: 22,
-            border: '2px solid var(--color-primary)',
-            background: 'var(--color-surface)',
-            borderRadius: 12,
-            boxShadow: '0 8px 30px rgba(0,0,0,0.15)',
-          }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 600, fontSize: 16 }}>
-                <Key size={18} color="var(--color-primary)" />
-                Vision AI Configuration (Groq / Gemini)
-              </div>
-              <button
-                onClick={() => setShowKeyModal(false)}
-                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-text-secondary)', fontSize: 18, padding: 4 }}
-              >
-                ✕
-              </button>
-            </div>
-
-            <p style={{ fontSize: 13, color: 'var(--color-text-secondary)', marginBottom: 16, lineHeight: 1.5 }}>
-              Paste your free <strong>Groq API Key</strong> (starts with <code style={{ color: 'var(--color-primary)' }}>gsk_</code>) or <strong>Gemini API Key</strong> (starts with <code style={{ color: 'var(--color-primary)' }}>AIza</code>). The key is stored locally in your browser. All laboratory metrology prompts and millimeter extraction run automatically in the backend.
-            </p>
-
-            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 10 }}>
-              <input
-                type="password"
-                className="form-input"
-                placeholder="gsk_... or AIza..."
-                value={tempKeyInput}
-                onChange={(e) => setTempKeyInput(e.target.value)}
-                style={{ flex: 1, minWidth: 260, fontFamily: 'monospace', fontSize: 14 }}
-              />
-              <button
-                onClick={handleSaveApiKey}
-                className="btn btn-primary"
-                style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
-              >
-                {keySavedToast ? <><Check size={16} /> Saved!</> : 'Save Key'}
-              </button>
-              {visionApiKey && (
-                <button
-                  onClick={handleClearApiKey}
-                  className="btn btn-secondary"
-                  style={{ color: '#ef4444' }}
-                >
-                  Clear Key
-                </button>
-              )}
-            </div>
-
-            <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', display: 'flex', alignItems: 'center', gap: 6 }}>
-              <Info size={14} />
-              <span>
-                You can also configure <code style={{ fontFamily: 'monospace' }}>GROQ_API_KEY</code> or <code style={{ fontFamily: 'monospace' }}>GEMINI_API_KEY</code> in <code style={{ fontFamily: 'monospace' }}>.env.local</code> or on Render.
-              </span>
-            </div>
-          </div>
-        )}
+        <h1 style={{ marginBottom: 8 }}>New Scan</h1>
+        <p style={{ color: 'var(--color-text-secondary)', marginBottom: 32 }}>
+          Analyze an Irisathenas Band H₂S dosimetry reading with adaptive floating alignment lines
+        </p>
 
         {/* Progress Steps */}
         <div style={{ marginBottom: 32 }}>
@@ -979,13 +841,9 @@ export default function NewScanPage() {
         {step === 3 && (
           <div className="card" style={{ textAlign: 'center', padding: 60 }}>
             <div className="loading" style={{ width: 48, height: 48, margin: '0 auto 20px' }}></div>
-            <h3>
-              {visionApiKey ? 'Vision AI Reading Common Scale...' : 'Analyzing Irisathenas Band...'}
-            </h3>
-            <p style={{ color: 'var(--color-text-secondary)', maxWidth: 480, margin: '0 auto' }}>
-              {visionApiKey
-                ? 'AI is identifying printed millimeter markings (0–50 mm) and measuring stain fronts for High Humident, Low Humident, and Integrity...'
-                : 'Detecting orientation tilt, lanes, fiducials, and reaction fronts...'}
+            <h3>Analyzing Irisathenas Band...</h3>
+            <p style={{ color: 'var(--color-text-secondary)' }}>
+              Detecting orientation tilt, lanes, fiducials, and reaction fronts
             </p>
           </div>
         )}
@@ -994,25 +852,11 @@ export default function NewScanPage() {
         {step === 4 && detectionResult && (
           <div>
             <div className="card" style={{ marginBottom: 20 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 10 }}>
-                <div>
-                  <h3 style={{ margin: '0 0 4px' }}>Badge Detection & Scale Alignment</h3>
-                  {detectionResult.isAiVision && (
-                    <div style={{ fontSize: 13, color: '#10b981', display: 'flex', alignItems: 'center', gap: 4 }}>
-                      <CheckCircle size={14} /> Measured via Vision AI ({detectionResult.provider?.toUpperCase()}) — Scale Aligned
-                    </div>
-                  )}
-                </div>
-                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                  {detectionResult.isAiVision && (
-                    <span className="badge badge-success" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                      <Sparkles size={12} /> Vision AI Active
-                    </span>
-                  )}
-                  <span className="badge badge-primary">
-                    Tilt Angle: {tiltAngle >= 0 ? '+' : ''}{tiltAngle.toFixed(1)}°
-                  </span>
-                </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                <h3 style={{ margin: 0 }}>Adaptive Floating Detection & Orientation</h3>
+                <span className="badge badge-primary">
+                  Tilt Angle: {tiltAngle >= 0 ? '+' : ''}{tiltAngle.toFixed(1)}°
+                </span>
               </div>
 
               <div style={{ marginBottom: 20 }}>
@@ -1318,12 +1162,6 @@ export default function NewScanPage() {
                       </div>
                     </div>
                   </div>
-
-                  {detectionResult.notes && (
-                    <div style={{ marginTop: 12, padding: '10px 14px', background: 'rgba(16, 185, 129, 0.08)', borderRadius: 6, fontSize: 13, color: 'var(--color-text-secondary)', border: '1px solid rgba(16, 185, 129, 0.2)' }}>
-                      <strong style={{ color: '#10b981' }}>Vision AI Observation:</strong> {detectionResult.notes}
-                    </div>
-                  )}
                 </div>
               )}
 

@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { VISION_API_KEY, GROQ_MODEL, GEMINI_MODEL } from '@/lib/config/vision'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 30 // Allow up to 30s timeout on serverless if needed
@@ -43,11 +44,12 @@ export async function POST(req) {
       )
     }
 
-    // Determine API key from client or server environment
-    const apiKey = (clientApiKey && clientApiKey.trim()) ||
+    // Determine API key: check lib/config/vision.js first, then environment variables, then client
+    const apiKey = (VISION_API_KEY && VISION_API_KEY.trim()) ||
       process.env.GROQ_API_KEY ||
       process.env.GEMINI_API_KEY ||
-      process.env.NEXT_PUBLIC_GROQ_API_KEY
+      process.env.NEXT_PUBLIC_GROQ_API_KEY ||
+      (clientApiKey && clientApiKey.trim())
 
     if (!apiKey) {
       return NextResponse.json(
