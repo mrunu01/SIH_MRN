@@ -77,12 +77,13 @@ export default function HistoryPage() {
   }
 
   // Calculate statistics
+  const validScansWithDose = scans.filter(s => s.scan_measurements?.[0]?.dose_ppm_hr != null)
   const stats = {
     total: scans.length,
     valid: scans.filter(s => s.status === 'analyzed' && s.integrity_status === 'PASS').length,
     invalid: scans.filter(s => s.integrity_status === 'FAIL').length,
-    avgDose: scans.length > 0
-      ? scans.reduce((sum, s) => sum + (s.scan_measurements?.[0]?.dose_ppm_hr || 0), 0) / scans.filter(s => s.scan_measurements?.[0]?.dose_ppm_hr).length
+    avgDose: validScansWithDose.length > 0
+      ? validScansWithDose.reduce((sum, s) => sum + s.scan_measurements[0].dose_ppm_hr, 0) / validScansWithDose.length
       : 0,
   }
 

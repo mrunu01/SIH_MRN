@@ -37,8 +37,9 @@ export default function DashboardPage() {
   }
 
   const latestDose = scans[0]?.scan_measurements?.[0]?.dose_ppm_hr
-  const avgDose = scans.length > 0
-    ? scans.reduce((sum, s) => sum + (s.scan_measurements?.[0]?.dose_ppm_hr || 0), 0) / scans.filter(s => s.scan_measurements?.[0]?.dose_ppm_hr).length
+  const validDoseScans = scans.filter(s => s.scan_measurements?.[0]?.dose_ppm_hr != null)
+  const avgDose = validDoseScans.length > 0
+    ? validDoseScans.reduce((sum, s) => sum + (s.scan_measurements[0].dose_ppm_hr || 0), 0) / validDoseScans.length
     : null
 
   return (
