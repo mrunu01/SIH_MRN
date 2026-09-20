@@ -138,7 +138,7 @@ export default function DashboardPage() {
             <div className="empty-state">
               <Camera size={48} strokeWidth={1} />
               <h3 style={{ marginTop: 16, marginBottom: 8 }}>No scans yet</h3>
-              <p style={{ marginBottom: 20 }}>Capture your first AEGIS-BAND reading</p>
+              <p style={{ marginBottom: 20 }}>Capture your first Irisathenas Band reading</p>
               <Link href="/new-scan" className="btn btn-primary">
                 New Scan
               </Link>
@@ -200,7 +200,7 @@ export default function DashboardPage() {
         <div className="alert alert-warning" style={{ marginTop: 40 }}>
           <AlertTriangle size={18} />
           <div>
-            <strong>Remember:</strong> This is a research prototype. AEGIS-BAND is not a certified gas detector or PPE.
+            <strong>Remember:</strong> This is a research prototype. Irisathenas Band is not a certified gas detector or PPE.
             All readings represent project specification targets, not independently validated measurements.
           </div>
         </div>

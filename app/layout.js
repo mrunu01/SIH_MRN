@@ -1,8 +1,8 @@
 import '../styles/globals.css'
 
 export const metadata = {
-  title: 'AEGIS-BAND v2 | Passive H₂S Dosimetry',
-  description: 'Passive H₂S Dosimetry Wristband - We measure a distance, not a colour',
+  title: 'Irisathenas Band | Passive H₂S Dosimetry',
+  description: 'Irisathenas Band - Passive H₂S Dosimetry Wristband: We measure a distance, not a colour',
 }
 
 export const viewport = {

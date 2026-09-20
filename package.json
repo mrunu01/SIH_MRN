@@ -1,8 +1,8 @@
 {
-  "name": "aegis-band-v2",
+  "name": "irisathenas-band",
   "version": "2.0.0",
   "private": true,
-  "description": "AEGIS-BAND v2: Passive H₂S Dosimetry Wristband - Web Platform & CV Engine",
+  "description": "Irisathenas Band: Passive H₂S Dosimetry Wristband - Web Platform & CV Engine",
   "scripts": {
     "dev": "next dev",
     "build": "next build",

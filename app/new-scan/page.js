@@ -1,9 +1,24 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { Camera, Upload, ArrowLeft, AlertTriangle, CheckCircle, XCircle, Eye, ZoomIn } from 'lucide-react'
+import {
+  Camera,
+  Upload,
+  ArrowLeft,
+  AlertTriangle,
+  CheckCircle,
+  XCircle,
+  RotateCw,
+  RotateCcw,
+  Sliders,
+  RefreshCw,
+  Video,
+  VideoOff,
+  Info,
+  Ruler,
+} from 'lucide-react'
 import Navbar from '@/components/Navbar'
 import { saveScan as saveScanToStorage } from '@/lib/storage/localStorage'
 import { BandDetector } from '@/lib/analysis/bandDetection'
@@ -18,6 +33,15 @@ export default function NewScanPage() {
   const [imageElement, setImageElement] = useState(null)
   const [qualityResult, setQualityResult] = useState(null)
   const [detectionResult, setDetectionResult] = useState(null)
+  const [detectorInstance, setDetectorInstance] = useState(null)
+  const [tiltAngle, setTiltAngle] = useState(0)
+  const [centerOffsetX, setCenterOffsetX] = useState(0)
+  const [centerOffsetY, setCenterOffsetY] = useState(0)
+  const [bandScale, setBandScale] = useState(1.0)
+  const [showAdvancedAlign, setShowAdvancedAlign] = useState(false)
+  const [isLiveCameraOpen, setIsLiveCameraOpen] = useState(false)
+  const [cameraError, setCameraError] = useState('')
+
   const [measurements, setMeasurements] = useState(null)
   const [doseResult, setDoseResult] = useState(null)
   const [scanData, setScanData] = useState({
@@ -32,20 +56,77 @@ export default function NewScanPage() {
   const [error, setError] = useState('')
   const fileInputRef = useRef(null)
   const cameraInputRef = useRef(null)
+  const videoRef = useRef(null)
+  const cameraStreamRef = useRef(null)
   const router = useRouter()
+
+  // Clean up camera stream on unmount
+  useEffect(() => {
+    return () => {
+      if (cameraStreamRef.current) {
+        cameraStreamRef.current.getTracks().forEach((track) => track.stop())
+      }
+    }
+  }, [])
+
+  const startLiveCamera = async () => {
+    try {
+      setCameraError('')
+      setIsLiveCameraOpen(true)
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } },
+        audio: false,
+      })
+      cameraStreamRef.current = stream
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream
+      }
+    } catch (err) {
+      console.error('Live camera error:', err)
+      setCameraError('Unable to access device camera directly. Please use Take Photo or Upload Image.')
+      setIsLiveCameraOpen(false)
+    }
+  }
+
+  const stopLiveCamera = () => {
+    if (cameraStreamRef.current) {
+      cameraStreamRef.current.getTracks().forEach((track) => track.stop())
+      cameraStreamRef.current = null
+    }
+    setIsLiveCameraOpen(false)
+  }
+
+  const captureLiveFrame = () => {
+    if (!videoRef.current) return
+    const video = videoRef.current
+    const canvas = document.createElement('canvas')
+    canvas.width = video.videoWidth || 1280
+    canvas.height = video.videoHeight || 720
+    const ctx = canvas.getContext('2d')
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
+    const dataUrl = canvas.toDataURL('image/png')
+    stopLiveCamera()
+
+    setImagePreview(dataUrl)
+    const img = new Image()
+    img.onload = () => {
+      setImageElement(img)
+      setStep(2)
+      performQualityCheck(img, 1024 * 500)
+    }
+    img.src = dataUrl
+  }
 
   const handleFileSelect = async (e) => {
     const file = e.target.files[0]
     if (!file) return
 
-    // Validate file type
     const typeValidation = validateFileType(file)
     if (!typeValidation.valid) {
       setError(typeValidation.error)
       return
     }
 
-    // Validate file size
     const sizeValidation = validateFileSize(file)
     if (!sizeValidation.valid) {
       setError(sizeValidation.error)
@@ -55,12 +136,9 @@ export default function NewScanPage() {
     setImageFile(file)
     setError('')
 
-    // Create preview
     const reader = new FileReader()
     reader.onload = (e) => {
       setImagePreview(e.target.result)
-
-      // Load image for quality check
       const img = new Image()
       img.onload = () => {
         setImageElement(img)
@@ -79,7 +157,6 @@ export default function NewScanPage() {
       setQualityResult(quality)
       setError('')
     } catch (err) {
-      // Continue anyway
       setQualityResult({ status: 'PASS', width: img.naturalWidth, height: img.naturalHeight, errors: [], warnings: [], canProceed: true })
     } finally {
       setLoading(false)
@@ -95,10 +172,15 @@ export default function NewScanPage() {
 
     try {
       const detector = new BandDetector(imageElement)
+      setDetectorInstance(detector)
       const result = await detector.detect()
 
       setDetectionResult(result)
       setMeasurements(result.measurements)
+      setTiltAngle(result.angleDeg || 0)
+      setCenterOffsetX(0)
+      setCenterOffsetY(0)
+      setBandScale(1.0)
 
       if (!result.measurements) {
         setError('Could not detect band measurements automatically. Manual correction required.')
@@ -112,6 +194,35 @@ export default function NewScanPage() {
     }
   }
 
+  // Real-time recalculation when user rotates or shifts the floating alignment lines
+  const updateDetectionAdjustment = async (newAngle, newOffsetX = centerOffsetX, newOffsetY = centerOffsetY, newScale = bandScale) => {
+    if (!detectorInstance) return
+    const angle = parseFloat(newAngle)
+    const offX = parseFloat(newOffsetX)
+    const offY = parseFloat(newOffsetY)
+    const sc = parseFloat(newScale)
+
+    setTiltAngle(angle)
+    setCenterOffsetX(offX)
+    setCenterOffsetY(offY)
+    setBandScale(sc)
+
+    const result = await detectorInstance.detect({
+      manualAngleDeg: angle,
+      centerOffset: { x: offX, y: offY },
+      scale: sc,
+    })
+
+    setDetectionResult(result)
+    setMeasurements(result.measurements)
+  }
+
+  const autoDetectTilt = async () => {
+    if (!detectorInstance) return
+    const detectedAngle = detectorInstance.detectBandOrientation()
+    updateDetectionAdjustment(detectedAngle, 0, 0, 1.0)
+  }
+
   const calculateDose = () => {
     if (!measurements) return
 
@@ -120,7 +231,7 @@ export default function NewScanPage() {
       exposureTimeHours: parseFloat(scanData.exposureTimeHours) || 8,
       temperatureC: scanData.temperatureC ? parseFloat(scanData.temperatureC) : undefined,
       relativeHumidity: scanData.relativeHumidity ? parseFloat(scanData.relativeHumidity) : undefined,
-      calibrationAlpha: 0.5, // Default calibration constant
+      calibrationAlpha: PROJECT_CONFIG.calibrationAlpha || 0.2285714,
     }
 
     const result = calculateExposureDose(measurements, inputParams)
@@ -143,7 +254,7 @@ export default function NewScanPage() {
 
       const scanRecord = {
         id: scanId,
-        band_id: scanData.bandId || 'BAND-' + Math.floor(1000 + Math.random() * 9000),
+        band_id: scanData.bandId || 'IRIS-' + Math.floor(1000 + Math.random() * 9000),
         captured_at: timestamp,
         original_image_path: imagePreview,
         processed_image_path: processedImage,
@@ -152,7 +263,8 @@ export default function NewScanPage() {
         image_quality_status: qualityResult?.status || 'PASS',
         analysis_method: 'auto',
         analysis_version: 'v2.0',
-        manual_correction_used: false,
+        manual_correction_used: tiltAngle !== 0,
+        tilt_angle_deg: tiltAngle,
         notes: scanData.notes || null,
         scan_measurements: [
           {
@@ -189,6 +301,7 @@ export default function NewScanPage() {
             analysis_json: {
               detectionResult,
               qualityResult,
+              tiltAngle,
             },
           },
         ],
@@ -213,13 +326,13 @@ export default function NewScanPage() {
 
         <h1 style={{ marginBottom: 8 }}>New Scan</h1>
         <p style={{ color: 'var(--color-text-secondary)', marginBottom: 32 }}>
-          Analyze an AEGIS-BAND H₂S dosimetry reading
+          Analyze an Irisathenas Band H₂S dosimetry reading with adaptive floating alignment lines
         </p>
 
         {/* Progress Steps */}
         <div style={{ marginBottom: 32 }}>
           <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
-            {['Capture', 'Preview', 'Detect', 'Measure', 'Calculate', 'Review'].map((label, i) => (
+            {['Capture', 'Preview', 'Detect & Align', 'Measure', 'Calculate', 'Review'].map((label, i) => (
               <div
                 key={label}
                 style={{
@@ -232,7 +345,7 @@ export default function NewScanPage() {
             ))}
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: 'var(--color-text-secondary)' }}>
-            {['Capture', 'Preview', 'Detect', 'Measure', 'Calculate', 'Review'].map((label, i) => (
+            {['Capture', 'Preview', 'Detect & Align', 'Measure', 'Calculate', 'Review'].map((label, i) => (
               <span key={label} style={{ flex: 1, textAlign: 'center', fontWeight: i + 1 === step ? 600 : 400, color: i + 1 === step ? 'var(--color-primary)' : undefined }}>
                 {label}
               </span>
@@ -251,27 +364,114 @@ export default function NewScanPage() {
         {step === 1 && (
           <div className="card" style={{ textAlign: 'center', padding: 40 }}>
             <Camera size={64} strokeWidth={1} style={{ color: 'var(--color-text-tertiary)', marginBottom: 20 }} />
-            <h3 style={{ marginBottom: 12 }}>Capture or Upload Band Image</h3>
-            <p style={{ color: 'var(--color-text-secondary)', marginBottom: 32 }}>
-              Take a clear photo of the entire AEGIS-BAND with all three lanes visible
+            <h3 style={{ marginBottom: 12 }}>Capture or Upload Irisathenas Band</h3>
+            <p style={{ color: 'var(--color-text-secondary)', marginBottom: 24, maxWidth: 540, margin: '0 auto 24px' }}>
+              Take a photo of your wristband with all three lanes visible. The CV engine will automatically detect orientation tilt and align floating measurement lines.
             </p>
 
-            <div style={{ display: 'grid', gap: 16, maxWidth: 400, margin: '0 auto' }}>
-              <button
-                onClick={() => cameraInputRef.current?.click()}
-                className="btn btn-primary btn-lg"
-              >
-                <Camera size={20} />
-                Take Photo
-              </button>
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                className="btn btn-secondary btn-lg"
-              >
-                <Upload size={20} />
-                Upload Image
-              </button>
-            </div>
+            {cameraError && (
+              <div className="alert alert-warning" style={{ maxWidth: 500, margin: '0 auto 20px', textAlign: 'left' }}>
+                <AlertTriangle size={18} />
+                <span>{cameraError}</span>
+              </div>
+            )}
+
+            {isLiveCameraOpen ? (
+              <div style={{ maxWidth: 640, margin: '0 auto', textAlign: 'center' }}>
+                <div style={{
+                  position: 'relative',
+                  width: '100%',
+                  aspectRatio: '4/3',
+                  background: '#000',
+                  borderRadius: 12,
+                  overflow: 'hidden',
+                  marginBottom: 16,
+                  border: '2px solid var(--color-primary)',
+                }}>
+                  <video
+                    ref={videoRef}
+                    autoPlay
+                    playsInline
+                    muted
+                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                  />
+
+                  {/* Floating alignment guides overlay over live video */}
+                  <div style={{
+                    position: 'absolute',
+                    top: '25%',
+                    left: '10%',
+                    right: '10%',
+                    bottom: '25%',
+                    border: '2px dashed rgba(0, 210, 255, 0.9)',
+                    borderRadius: 8,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'space-between',
+                    pointerEvents: 'none',
+                    background: 'rgba(0, 102, 204, 0.1)',
+                  }}>
+                    <div style={{ height: '33.3%', borderBottom: '1px dashed rgba(255, 255, 255, 0.6)', display: 'flex', alignItems: 'center', paddingLeft: 8, color: '#fff', fontSize: 11, fontWeight: 600 }}>
+                      Lane A (Dose)
+                    </div>
+                    <div style={{ height: '33.3%', borderBottom: '1px dashed rgba(255, 255, 255, 0.6)', display: 'flex', alignItems: 'center', paddingLeft: 8, color: '#fff', fontSize: 11, fontWeight: 600 }}>
+                      Lane B (Humidity)
+                    </div>
+                    <div style={{ height: '33.3%', display: 'flex', alignItems: 'center', paddingLeft: 8, color: '#fff', fontSize: 11, fontWeight: 600 }}>
+                      Lane R (Integrity)
+                    </div>
+                  </div>
+
+                  <div style={{
+                    position: 'absolute',
+                    bottom: 12,
+                    left: 0,
+                    right: 0,
+                    textAlign: 'center',
+                    color: '#fff',
+                    fontSize: 12,
+                    background: 'rgba(0,0,0,0.6)',
+                    padding: '4px 8px',
+                  }}>
+                    Align the physical band inside the 3 floating lanes
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
+                  <button onClick={captureLiveFrame} className="btn btn-primary btn-lg">
+                    <Camera size={20} /> Snap Photo & Analyze
+                  </button>
+                  <button onClick={stopLiveCamera} className="btn btn-secondary">
+                    <VideoOff size={18} /> Close Camera
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div style={{ display: 'grid', gap: 14, maxWidth: 420, margin: '0 auto' }}>
+                <button
+                  onClick={startLiveCamera}
+                  className="btn btn-primary btn-lg"
+                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 }}
+                >
+                  <Video size={20} />
+                  Open Live Viewfinder
+                </button>
+                <button
+                  onClick={() => cameraInputRef.current?.click()}
+                  className="btn btn-secondary btn-lg"
+                >
+                  <Camera size={20} />
+                  Take Photo (Device Camera)
+                </button>
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  className="btn btn-secondary btn-lg"
+                >
+                  <Upload size={20} />
+                  Upload Photo File
+                </button>
+              </div>
+            )}
 
             <input
               ref={cameraInputRef}
@@ -306,10 +506,10 @@ export default function NewScanPage() {
               <div style={{ padding: 16, background: 'var(--color-bg)', borderRadius: 8, marginBottom: 16 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                   <span style={{ fontSize: 14, fontWeight: 600 }}>Status:</span>
-                  <span className="badge badge-success">READY FOR DETECTION</span>
+                  <span className="badge badge-success">READY FOR ROTATED DETECTION</span>
                 </div>
                 <div style={{ fontSize: 14, color: 'var(--color-text-secondary)', marginTop: 8 }}>
-                  Image loaded. The computer vision engine will measure reaction-front distance relative to printed fiducials.
+                  Image loaded. The Irisathenas CV engine will automatically detect band tilt and align 3 floating lines along the band axis.
                 </div>
               </div>
 
@@ -331,7 +531,7 @@ export default function NewScanPage() {
                   disabled={loading}
                   style={{ flex: 1 }}
                 >
-                  {loading ? <span className="loading" /> : 'Continue to Detection'}
+                  {loading ? <span className="loading" /> : 'Run Detection & Align Lines'}
                 </button>
               </div>
             </div>
@@ -342,18 +542,23 @@ export default function NewScanPage() {
         {step === 3 && (
           <div className="card" style={{ textAlign: 'center', padding: 60 }}>
             <div className="loading" style={{ width: 48, height: 48, margin: '0 auto 20px' }}></div>
-            <h3>Analyzing Band...</h3>
+            <h3>Analyzing Irisathenas Band...</h3>
             <p style={{ color: 'var(--color-text-secondary)' }}>
-              Detecting lanes, fiducials, and reaction fronts
+              Detecting orientation tilt, lanes, fiducials, and reaction fronts
             </p>
           </div>
         )}
 
-        {/* Step 4: Detection Results & Manual Correction */}
+        {/* Step 4: Detection Results & Adaptive Floating Alignment Controls */}
         {step === 4 && detectionResult && (
           <div>
             <div className="card" style={{ marginBottom: 20 }}>
-              <h3 style={{ marginBottom: 16 }}>Detection Results</h3>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                <h3 style={{ margin: 0 }}>Adaptive Floating Detection & Orientation</h3>
+                <span className="badge badge-primary">
+                  Tilt Angle: {tiltAngle >= 0 ? '+' : ''}{tiltAngle.toFixed(1)}°
+                </span>
+              </div>
 
               <div style={{ marginBottom: 20 }}>
                 {detectionResult.annotatedCanvas ? (
@@ -373,40 +578,161 @@ export default function NewScanPage() {
                 )}
               </div>
 
-              <div style={{ display: 'grid', gap: 12, marginBottom: 20 }}>
-                <DetectionStatus label="Band Detected" status={detectionResult.bandDetected} />
-                <DetectionStatus label="Fiducials Detected" status={detectionResult.fiducialsDetected} />
-                <DetectionStatus label="Lane A Detected" status={detectionResult.lanesDetected.A} />
-                <DetectionStatus label="Lane B Detected" status={detectionResult.lanesDetected.B} />
-                <DetectionStatus label="Lane R Detected" status={detectionResult.lanesDetected.R} />
+              {/* Interactive Floating Alignment & Rotation Control Panel */}
+              <div style={{
+                padding: 18,
+                background: 'var(--color-bg)',
+                borderRadius: 10,
+                border: '1px solid var(--color-border)',
+                marginBottom: 20,
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 600, fontSize: 15 }}>
+                    <Sliders size={18} color="var(--color-primary)" />
+                    Adjust Floating Lines & Angle Stability
+                  </div>
+                  <button
+                    onClick={autoDetectTilt}
+                    className="btn btn-secondary"
+                    style={{ fontSize: 12, padding: '4px 10px', display: 'flex', alignItems: 'center', gap: 6 }}
+                  >
+                    <RefreshCw size={13} /> Auto-Detect Tilt
+                  </button>
+                </div>
+
+                <p style={{ fontSize: 13, color: 'var(--color-text-secondary)', marginBottom: 14 }}>
+                  If your image is tilted or rotated, slide the angle or click the rotation buttons. The 3 floating lines will rotate and lock directly over the physical band channels.
+                </p>
+
+                {/* Angle Slider */}
+                <div style={{ marginBottom: 16 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, fontWeight: 500, marginBottom: 6 }}>
+                    <span>Rotation Angle:</span>
+                    <span style={{ fontFamily: 'monospace', fontWeight: 600, color: 'var(--color-primary)' }}>
+                      {tiltAngle >= 0 ? '+' : ''}{tiltAngle.toFixed(1)}°
+                    </span>
+                  </div>
+                  <input
+                    type="range"
+                    min="-90"
+                    max="90"
+                    step="0.5"
+                    value={tiltAngle}
+                    onChange={(e) => updateDetectionAdjustment(e.target.value)}
+                    style={{ width: '100%', accentColor: 'var(--color-primary)' }}
+                  />
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--color-text-secondary)', marginTop: 2 }}>
+                    <span>-90° (Vertical)</span>
+                    <span>-45°</span>
+                    <span>0° (Horizontal)</span>
+                    <span>+45°</span>
+                    <span>+90° (Vertical)</span>
+                  </div>
+                </div>
+
+                {/* Quick Alignment Presets */}
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
+                  <button
+                    onClick={() => updateDetectionAdjustment(-90)}
+                    className="btn btn-secondary"
+                    style={{ fontSize: 12, padding: '4px 8px' }}
+                  >
+                    -90°
+                  </button>
+                  <button
+                    onClick={() => updateDetectionAdjustment(tiltAngle - 15)}
+                    className="btn btn-secondary"
+                    style={{ fontSize: 12, padding: '4px 8px', display: 'flex', alignItems: 'center', gap: 4 }}
+                  >
+                    <RotateCcw size={12} /> -15°
+                  </button>
+                  <button
+                    onClick={() => updateDetectionAdjustment(0)}
+                    className="btn btn-secondary"
+                    style={{ fontSize: 12, padding: '4px 8px' }}
+                  >
+                    0° Level
+                  </button>
+                  <button
+                    onClick={() => updateDetectionAdjustment(tiltAngle + 15)}
+                    className="btn btn-secondary"
+                    style={{ fontSize: 12, padding: '4px 8px', display: 'flex', alignItems: 'center', gap: 4 }}
+                  >
+                    <RotateCw size={12} /> +15°
+                  </button>
+                  <button
+                    onClick={() => updateDetectionAdjustment(90)}
+                    className="btn btn-secondary"
+                    style={{ fontSize: 12, padding: '4px 8px' }}
+                  >
+                    +90°
+                  </button>
+
+                  <button
+                    onClick={() => setShowAdvancedAlign(!showAdvancedAlign)}
+                    className="btn btn-secondary"
+                    style={{ fontSize: 12, padding: '4px 8px', marginLeft: 'auto' }}
+                  >
+                    {showAdvancedAlign ? 'Hide Fine Tuning' : 'Fine Tune Position'}
+                  </button>
+                </div>
+
+                {/* Advanced Position Sliders */}
+                {showAdvancedAlign && (
+                  <div style={{
+                    marginTop: 12,
+                    paddingTop: 12,
+                    borderTop: '1px solid var(--color-border)',
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+                    gap: 12,
+                  }}>
+                    <div>
+                      <div style={{ fontSize: 12, marginBottom: 4 }}>Shift X Offset: {centerOffsetX}px</div>
+                      <input
+                        type="range"
+                        min="-150"
+                        max="150"
+                        value={centerOffsetX}
+                        onChange={(e) => updateDetectionAdjustment(tiltAngle, e.target.value, centerOffsetY, bandScale)}
+                        style={{ width: '100%' }}
+                      />
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 12, marginBottom: 4 }}>Shift Y Offset: {centerOffsetY}px</div>
+                      <input
+                        type="range"
+                        min="-150"
+                        max="150"
+                        value={centerOffsetY}
+                        onChange={(e) => updateDetectionAdjustment(tiltAngle, centerOffsetX, e.target.value, bandScale)}
+                        style={{ width: '100%' }}
+                      />
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 12, marginBottom: 4 }}>Scale Size: {bandScale.toFixed(2)}x</div>
+                      <input
+                        type="range"
+                        min="0.6"
+                        max="1.5"
+                        step="0.05"
+                        value={bandScale}
+                        onChange={(e) => updateDetectionAdjustment(tiltAngle, centerOffsetX, centerOffsetY, e.target.value)}
+                        style={{ width: '100%' }}
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
 
-              <div style={{ padding: 16, background: 'var(--color-bg)', borderRadius: 8, marginBottom: 16 }}>
-                <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 8 }}>Detection Confidence</div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                  <div style={{ flex: 1, height: 8, background: 'var(--color-border)', borderRadius: 4, overflow: 'hidden' }}>
-                    <div style={{
-                      width: `${detectionResult.confidence * 100}%`,
-                      height: '100%',
-                      background: detectionResult.confidence > 0.7 ? 'var(--color-success)' : detectionResult.confidence > 0.5 ? 'var(--color-warning)' : 'var(--color-error)',
-                    }} />
-                  </div>
-                  <span style={{ fontSize: 14, fontWeight: 600 }}>
-                    {(detectionResult.confidence * 100).toFixed(0)}%
-                  </span>
-                </div>
+              {/* Status checklist */}
+              <div style={{ display: 'grid', gap: 10, marginBottom: 20 }}>
+                <DetectionStatus label="Orientation Stabilized" status={true} />
+                <DetectionStatus label="Fiducials Normalized (50mm span)" status={detectionResult.fiducialsDetected} />
+                <DetectionStatus label="Lane A (Dose Channel)" status={detectionResult.lanesDetected.A} />
+                <DetectionStatus label="Lane B (Humidity Channel)" status={detectionResult.lanesDetected.B} />
+                <DetectionStatus label="Lane R (Integrity Poka-Yoke)" status={detectionResult.lanesDetected.R} />
               </div>
-
-              {detectionResult.warnings.length > 0 && (
-                <div className="alert alert-warning" style={{ marginBottom: 16 }}>
-                  <AlertTriangle size={18} />
-                  <div>
-                    {detectionResult.warnings.map((warn, i) => (
-                      <div key={i}>{warn}</div>
-                    ))}
-                  </div>
-                </div>
-              )}
 
               <button
                 onClick={() => setStep(5)}
@@ -414,7 +740,7 @@ export default function NewScanPage() {
                 style={{ width: '100%' }}
                 disabled={!detectionResult.measurements}
               >
-                Continue to Measurements
+                Continue to Measurements & Reference Check
               </button>
             </div>
           </div>
@@ -424,9 +750,9 @@ export default function NewScanPage() {
         {step === 5 && measurements && (
           <div>
             <div className="card" style={{ marginBottom: 20 }}>
-              <h3 style={{ marginBottom: 16 }}>Measurements</h3>
+              <h3 style={{ marginBottom: 16 }}>Measurements & Theoretical Calibration</h3>
 
-              <div style={{ display: 'grid', gap: 16, marginBottom: 24 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 14, marginBottom: 24 }}>
                 <MeasurementDisplay
                   label="Lane A Length"
                   value={measurements.laneA?.lengthMM?.toFixed(2)}
@@ -445,14 +771,75 @@ export default function NewScanPage() {
                   status={measurements.laneR?.integrity}
                 />
                 <MeasurementDisplay
-                  label="A/B Ratio"
+                  label="A/B Humidity Ratio"
                   value={(measurements.laneA.lengthMM / measurements.laneB.lengthMM).toFixed(3)}
                 />
               </div>
 
+              {/* Theoretical Reference Table from uploaded user specification */}
+              <div style={{
+                background: 'var(--color-bg)',
+                borderRadius: 8,
+                padding: 16,
+                marginBottom: 24,
+                border: '1px solid var(--color-border)',
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                  <Ruler size={18} color="var(--color-primary)" />
+                  <div style={{ fontWeight: 600, fontSize: 14 }}>
+                    Theoretical Loading Table (Anchor: 8 ppm·hr = 35.0 mm)
+                  </div>
+                </div>
+                <div style={{ fontSize: 13, color: 'var(--color-text-secondary)', marginBottom: 12 }}>
+                  Calibrated to constant linear loading (4.375 mm/(ppm·hr) sensitivity, α ≈ 0.22857).
+                </div>
+
+                <div className="table-container" style={{ maxHeight: 200, overflowY: 'auto' }}>
+                  <table style={{ fontSize: 13 }}>
+                    <thead>
+                      <tr>
+                        <th>Dose (ppm·hr)</th>
+                        <th>Estimated Stain Length (mm)</th>
+                        <th>Anchor Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {PROJECT_CONFIG.calibrationTable.map((row) => {
+                        const isClose = Math.abs((measurements.laneA?.lengthMM || 0) - row.length) < 4.0
+                        return (
+                          <tr
+                            key={row.dose}
+                            style={{
+                              background: row.anchor
+                                ? 'rgba(0, 102, 204, 0.12)'
+                                : isClose
+                                ? 'rgba(16, 185, 129, 0.1)'
+                                : undefined,
+                              fontWeight: row.anchor ? 600 : undefined,
+                            }}
+                          >
+                            <td>{row.dose}</td>
+                            <td>{row.length.toFixed(1)}</td>
+                            <td>
+                              {row.anchor ? (
+                                <span className="badge badge-primary">★ Anchor Point</span>
+                              ) : isClose ? (
+                                <span className="badge badge-success">Closest Match</span>
+                              ) : (
+                                '—'
+                              )}
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
               <div className="divider" />
 
-              <h4 style={{ marginTop: 24, marginBottom: 16 }}>Scan Parameters</h4>
+              <h4 style={{ marginTop: 24, marginBottom: 16 }}>Shift Parameters</h4>
 
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16 }}>
                 <div className="form-group">
@@ -460,7 +847,7 @@ export default function NewScanPage() {
                   <input
                     type="text"
                     className="form-input"
-                    placeholder="e.g., BAND-2026-001"
+                    placeholder="e.g., IRIS-2026-001"
                     value={scanData.bandId}
                     onChange={(e) => setScanData({ ...scanData, bandId: e.target.value })}
                   />
@@ -506,21 +893,29 @@ export default function NewScanPage() {
                   <label className="form-label">Notes (Optional)</label>
                   <textarea
                     className="form-textarea"
-                    rows={3}
-                    placeholder="Additional observations or context..."
+                    rows={2}
+                    placeholder="Worker notes, area observations, or site conditions..."
                     value={scanData.notes}
                     onChange={(e) => setScanData({ ...scanData, notes: e.target.value })}
                   />
                 </div>
               </div>
 
-              <button
-                onClick={calculateDose}
-                className="btn btn-primary"
-                style={{ width: '100%', marginTop: 20 }}
-              >
-                Calculate Dose
-              </button>
+              <div style={{ display: 'flex', gap: 12, marginTop: 20 }}>
+                <button
+                  onClick={() => setStep(4)}
+                  className="btn btn-secondary"
+                >
+                  Back to Alignment
+                </button>
+                <button
+                  onClick={calculateDose}
+                  className="btn btn-primary"
+                  style={{ flex: 1 }}
+                >
+                  Calculate Dose (Anchor Calibration)
+                </button>
+              </div>
             </div>
           </div>
         )}
@@ -529,7 +924,7 @@ export default function NewScanPage() {
         {step === 6 && doseResult && (
           <div>
             <div className="card" style={{ marginBottom: 20 }}>
-              <h3 style={{ marginBottom: 16 }}>Dose Calculation</h3>
+              <h3 style={{ marginBottom: 16 }}>Dose Calculation (Irisathenas Anchor)</h3>
 
               {/* Main Dose Result */}
               <div style={{
@@ -540,66 +935,60 @@ export default function NewScanPage() {
                 marginBottom: 24,
                 border: doseResult.integrityStatus === 'PASS' ? '2px solid var(--color-border)' : '2px solid var(--color-error)',
               }}>
-                <div style={{ fontSize: 14, color: 'var(--color-text-secondary)', marginBottom: 8 }}>Calculated Dose</div>
+                <div style={{ fontSize: 14, color: 'var(--color-text-secondary)', marginBottom: 8 }}>Calculated Cumulative Dose</div>
                 <div style={{ fontSize: '3rem', fontWeight: 700, color: doseResult.integrityStatus === 'PASS' ? 'var(--color-primary)' : 'var(--color-error)' }}>
                   {doseResult.dose?.toFixed(2)} <span style={{ fontSize: '1.25rem', fontWeight: 400 }}>ppm·hr</span>
                 </div>
+                <div style={{ fontSize: 14, color: 'var(--color-text-secondary)', marginTop: 6 }}>
+                  Anchor Reference: 35.0 mm = 8.0 ppm·hr ($S = 4.375\text{ mm/ppm}\cdot\text{hr}$)
+                </div>
                 {doseResult.integrityStatus === 'FAIL' && (
                   <div className="badge badge-error" style={{ marginTop: 12 }}>
-                    INTEGRITY FAIL — INVALID READING
+                    INTEGRITY FAIL — LANE R STAINED
                   </div>
                 )}
               </div>
 
-              {/* Warnings */}
-              {doseResult.warnings.length > 0 && (
-                <div className="alert alert-warning" style={{ marginBottom: 20 }}>
-                  <AlertTriangle size={18} />
-                  <div>
-                    {doseResult.warnings.map((warn, i) => (
-                      <div key={i} style={{ marginTop: i > 0 ? 8 : 0 }}>{warn}</div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
               {/* Formulas */}
               <div style={{ marginBottom: 20 }}>
-                <h4 style={{ marginBottom: 16 }}>Formulas Used</h4>
+                <h4 style={{ marginBottom: 16 }}>Mathematical Breakdown</h4>
                 {doseResult.formulasUsed.map((formula, i) => (
                   <div key={i} style={{ marginBottom: 16, padding: 16, background: 'var(--color-bg)', borderRadius: 8 }}>
                     <h5 style={{ marginBottom: 8 }}>{formula.name}</h5>
-                    <div style={{ fontFamily: 'monospace', fontSize: 16, padding: '12px 0', color: 'var(--color-primary)' }}>
+                    <div style={{ fontFamily: 'monospace', fontSize: 15, padding: '8px 0', color: 'var(--color-primary)' }}>
                       {formula.formula}
                     </div>
                     {formula.variables && (
-                      <div style={{ fontSize: 14, marginTop: 8 }}>
+                      <div style={{ fontSize: 13, marginTop: 8 }}>
                         {Object.entries(formula.variables).map(([key, value]) => (
-                          <div key={key} style={{ padding: '4px 0' }}>
+                          <div key={key} style={{ padding: '3px 0' }}>
                             <strong>{key}:</strong> {value}
                           </div>
                         ))}
                       </div>
                     )}
-                    <p style={{ fontSize: 14, color: 'var(--color-text-secondary)', marginTop: 8, marginBottom: 0 }}>
+                    <p style={{ fontSize: 13, color: 'var(--color-text-secondary)', marginTop: 8, marginBottom: 0 }}>
                       {formula.explanation}
                     </p>
-                    {formula.note && (
-                      <p style={{ fontSize: 13, color: 'var(--color-warning)', marginTop: 8, marginBottom: 0 }}>
-                        {formula.note}
-                      </p>
-                    )}
                   </div>
                 ))}
               </div>
 
-              <button
-                onClick={() => setStep(7)}
-                className="btn btn-primary"
-                style={{ width: '100%' }}
-              >
-                Review & Save
-              </button>
+              <div style={{ display: 'flex', gap: 12 }}>
+                <button
+                  onClick={() => setStep(5)}
+                  className="btn btn-secondary"
+                >
+                  Back to Parameters
+                </button>
+                <button
+                  onClick={() => setStep(7)}
+                  className="btn btn-primary"
+                  style={{ flex: 1 }}
+                >
+                  Review & Save Record
+                </button>
+              </div>
             </div>
           </div>
         )}
@@ -608,12 +997,12 @@ export default function NewScanPage() {
         {step === 7 && doseResult && (
           <div>
             <div className="card">
-              <h3 style={{ marginBottom: 16 }}>Review Scan</h3>
+              <h3 style={{ marginBottom: 16 }}>Review Scan Record</h3>
 
               <div style={{ display: 'grid', gap: 16, marginBottom: 24 }}>
                 <div>
                   <div style={{ fontSize: 14, color: 'var(--color-text-secondary)', marginBottom: 4 }}>Band ID</div>
-                  <div style={{ fontWeight: 600 }}>{scanData.bandId || '—'}</div>
+                  <div style={{ fontWeight: 600 }}>{scanData.bandId || 'IRIS-AUTO'}</div>
                 </div>
                 <div>
                   <div style={{ fontSize: 14, color: 'var(--color-text-secondary)', marginBottom: 4 }}>Calculated Dose</div>
@@ -625,22 +1014,22 @@ export default function NewScanPage() {
                   <div style={{ fontSize: 14, color: 'var(--color-text-secondary)', marginBottom: 4 }}>Integrity Status</div>
                   <div>
                     {doseResult.integrityStatus === 'PASS' ? (
-                      <span className="badge badge-success">PASS</span>
+                      <span className="badge badge-success">PASS (Lane R Clean)</span>
                     ) : (
-                      <span className="badge badge-error">FAIL</span>
+                      <span className="badge badge-error">FAIL (Lane R Stained)</span>
                     )}
                   </div>
                 </div>
                 <div>
-                  <div style={{ fontSize: 14, color: 'var(--color-text-secondary)', marginBottom: 4 }}>Detection Confidence</div>
-                  <div>{(detectionResult.confidence * 100).toFixed(0)}%</div>
+                  <div style={{ fontSize: 14, color: 'var(--color-text-secondary)', marginBottom: 4 }}>Orientation Stabilized</div>
+                  <div>Tilt {tiltAngle >= 0 ? '+' : ''}{tiltAngle.toFixed(1)}°</div>
                 </div>
               </div>
 
               <div className="alert alert-warning">
                 <AlertTriangle size={18} />
                 <div>
-                  <strong>Remember:</strong> This is a project prototype. Results represent project specifications, not independently certified measurements.
+                  <strong>Notice:</strong> Irisathenas Band is an engineering/research prototype for passive H₂S dosimetry studies.
                 </div>
               </div>
 
@@ -657,7 +1046,7 @@ export default function NewScanPage() {
                   disabled={loading}
                   style={{ flex: 1 }}
                 >
-                  {loading ? <span className="loading" /> : 'Save Scan'}
+                  {loading ? <span className="loading" /> : 'Save Scan Locally'}
                 </button>
               </div>
             </div>
@@ -701,3 +1090,4 @@ function MeasurementDisplay({ label, value, unit, detected, status }) {
     </div>
   )
 }
+

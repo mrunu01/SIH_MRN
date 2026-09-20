@@ -177,8 +177,8 @@ export default function HistoryPage() {
               {scans.length === 0 ? (
                 <>
                   <HistoryIcon size={48} strokeWidth={1} />
-                  <h3 style={{ marginTop: 16, marginBottom: 8 }}>No scans yet</h3>
-                  <p style={{ marginBottom: 20 }}>Start by capturing your first AEGIS-BAND reading</p>
+                  <h3 style={{ marginTop: 16, marginBottom: 8 }}>No scans found</h3>
+                  <p style={{ marginBottom: 20 }}>Start by capturing your first Irisathenas Band reading</p>
                   <button onClick={() => router.push('/new-scan')} className="btn btn-primary">
                     New Scan
                   </button>

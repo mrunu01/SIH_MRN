@@ -1,4 +1,4 @@
-﻿'use client'
+'use client'
 
 import { useState } from 'react'
 import Link from 'next/link'
@@ -65,7 +65,7 @@ export default function Navbar() {
             }}>
               <Shield size={20} />
             </div>
-            <span style={{ fontWeight: 600, fontSize: '1.1rem' }}>AEGIS-BAND</span>
+            <span style={{ fontWeight: 600, fontSize: '1.1rem' }}>Irisathenas Band</span>
           </Link>
 
           {/* Desktop Navigation */}

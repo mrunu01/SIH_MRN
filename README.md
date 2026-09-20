@@ -1,4 +1,4 @@
-# AEGIS-BAND v2 — Passive H₂S Dosimetry Platform
+# Irisathenas Band — Passive H₂S Dosimetry Platform
 
 [![Next.js](https://img.shields.io/badge/Next.js-14.2-black?logo=next.js)](https://nextjs.org/)
 [![React](https://img.shields.io/badge/React-18.3-blue?logo=react)](https://react.dev/)
@@ -7,19 +7,19 @@
 
 > **"We measure a distance, not a colour."**
 
-**AEGIS-BAND v2** is a 100% local, privacy-first industrial personal safety web platform that measures accumulated hazardous hydrogen sulfide (H₂S) gas exposure using smartphone computer vision and passive wristband dosimetry.
+**Irisathenas Band** is a 100% local, privacy-first industrial personal safety web platform that measures accumulated hazardous hydrogen sulfide (H₂S) gas exposure using smartphone computer vision and passive wristband dosimetry.
 
 No cloud databases, no logins, no email verifications, and zero configuration required. The application runs entirely on your local machine with persistent in-browser storage.
 
 ---
 
-## 🎯 What AEGIS-BAND Does
+## 🎯 What Irisathenas Band Does
 
 In industrial environments (oil & gas, chemical plants, wastewater facilities, mining), workers wear disposable, passive chemical wristbands during their shift.
 
 Traditional badges fail because they try to detect **color shades**, which change under dim worklights, sunlight, or different phone cameras.
 
-**AEGIS-BAND solves this by measuring physical distance:**
+**Irisathenas Band solves this by measuring physical distance:**
 1. H₂S gas diffuses into the band's reaction capillary channel.
 2. A visible chemical reaction front **migrates along the lane**.
 3. At the end of the shift, the user snaps a photo of the band with any smartphone or webcam.
@@ -28,15 +28,49 @@ Traditional badges fail because they try to detect **color shades**, which chang
 
 ---
 
+## 📐 Adaptive Rotated & Floating Alignment Lines
+
+In real-world work environments, wristbands are rarely photographed in a perfectly level horizontal position. **Irisathenas Band** features an intelligent tilt & orientation engine:
+
+- **Automatic Angle Detection:** Uses image moments and Sobel gradient vectors to automatically determine the tilt angle ($-90^\circ$ to $+90^\circ$) of the wristband.
+- **Rotated Lane Inspection:** The three inspection ribbons (Lane A, Lane B, Lane R) dynamically rotate to match the orientation of the physical band, sampling pixel gradients along the rotated coordinate system.
+- **Interactive Tilt Slider & Quick Presets:** Fine-tune the inspection angle in real time with an interactive slider ($-90^\circ$ to $+90^\circ$) or quick presets ($-90^\circ$, $-15^\circ$, $0^\circ$, $+15^\circ$, $+90^\circ$).
+- **Live Camera Viewfinder Guide:** Displays a floating rectangular target and 3-lane preview overlay directly on the live camera stream to ensure optimal alignment before capturing.
+
+---
+
 ## 🛡️ Three-Lane Measurement System
 
-Every AEGIS-BAND features three chemical lanes to guarantee reliable readings:
+Every Irisathenas Band features three chemical lanes to guarantee reliable readings:
 
 | Lane | Name | How It Works & Why It Matters |
 |---|---|---|
 | **Lane A** | **Dose Lane** | Main exposure channel. The distance the dark front moves directly reflects accumulated H₂S exposure. |
 | **Lane B** | **Humidity Reference** | Measures environmental moisture effects. The ratio of Lane A to Lane B (`Length_A / Length_B`) eliminates humidity-induced measurement drift. |
 | **Lane R** | **Integrity Verification (Poka-Yoke)** | Sealed control lane. If Lane R shows any staining or darkening, the band is marked **INVALID / COMPROMISED** to prevent false safety readings. |
+
+---
+
+## 🧪 Theoretical Calibration: Anchor Point (35.0 mm = 8.0 ppm·hr)
+
+Irisathenas Band is calibrated to a verified linear loading relationship:
+- **Anchor Point:** $35.0\text{ mm}$ stain length corresponds to exactly $8.0\text{ ppm}\cdot\text{hr}$ accumulated exposure.
+- **Sensitivity ($S$):** $4.375\text{ mm}/(\text{ppm}\cdot\text{hr})$
+- **Conversion Factor ($\alpha$):** $0.2285714\text{ (ppm}\cdot\text{hr})/\text{mm}$
+- **Formula:** $\text{Dose (ppm}\cdot\text{hr)} = \text{Length}_A \times \alpha \times R$ (where $R = \text{Length}_A / \text{Length}_B$)
+
+### Calibration Reference Scale:
+| Nominal Dose (ppm·hr) | Theoretical Stain Length (mm) | OSHA / Industrial Status |
+|:---:|:---:|:---|
+| **1.0** | 4.4 mm | Normal (Baseline) |
+| **2.0** | 8.8 mm | Normal |
+| **4.0** | 17.5 mm | Normal |
+| **6.0** | 26.3 mm | Moderate Exposure |
+| **8.0** | **35.0 mm (Anchor)** | **Moderate Exposure** |
+| **10.0** | 43.8 mm | Elevated Exposure |
+| **16.0** | 70.0 mm | Action Required |
+| **32.0** | 140.0 mm | PEL Exceeded (Evacuate) |
+| **64.0** | 280.0 mm | Ceiling Exceeded (Danger) |
 
 ---
 
@@ -73,24 +107,24 @@ The platform opens **directly** to the full system — no login screen or passwo
 
 ### 1. Launch a New Scan
 - Click **"New Scan"** in the top navigation bar or **"Launch Scanner"** from the home page.
-- Choose **"Upload Photo"** or use your **device camera** to take a picture of your AEGIS-BAND wristband.
+- Choose **"Upload Photo"** or use your **device camera** with the live alignment overlay.
 - **Image Flexibility:** Any camera or resolution works smoothly. Resolution and lighting checks are non-blocking so you can process your measurements right away.
 
-### 2. Specify Shift Parameters
+### 2. Tilt & Lane Orientation Alignment
+- If your image is tilted or rotated, the engine automatically detects the angle.
+- You can manually rotate or fine-tune using the **Tilt Angle Slider** or preset angle buttons.
+- The 3 parallel lanes (Lane A, Lane B, Lane R) float and rotate directly over the band.
+
+### 3. Specify Shift Parameters
 - **Exposure Time (hours):** Enter the shift duration (e.g., 8 hours).
 - **Temperature (°C):** Ambient temperature on site (default: 25°C).
 - **Relative Humidity (% RH):** Ambient humidity (default: 50%).
-
-### 3. Automatic Computer Vision Analysis
-- The computer vision engine analyzes the image in real time right in your browser.
-- It identifies fiducial markers, isolates Lane A, Lane B, and Lane R, and measures the reaction front distance in millimeters.
-- You can inspect the annotated visualization showing exact lane boundaries, detected edge positions, and integrity status.
 
 ### 4. Review Dosimetry Results
 - **Accumulated Dose:** Reported in **ppm·hr** and time-weighted average (TWA in ppm).
 - **Exposure Category:** Normal, Moderate, Elevated, or Exceeded based on OSHA / NIOSH safety thresholds.
 - **Lane R Verification:** Confirms whether the band was intact and uncompromised.
-- **Mathematical Breakdown:** Full formula transparency (`Dose = Length_A × α × R`) displayed with all intermediate variables.
+- **Mathematical Breakdown:** Full formula transparency (`Dose = Length_A × 0.2285714 × R`) displayed with all intermediate variables.
 
 ### 5. Save & Manage Records
 - Click **"Save Scan"** to record the measurement with both original and annotated images.
@@ -106,11 +140,11 @@ The platform opens **directly** to the full system — no login screen or passwo
 | Page | URL | Purpose |
 |---|---|---|
 | **Home** | `/` | Overview of distance-based dosimetry and direct launch buttons. |
-| **New Scan** | `/new-scan` | Upload band photo, run CV analysis, preview measurements, and save. |
+| **New Scan** | `/new-scan` | Upload band photo, camera viewfinder, adaptive rotated lanes, and calculation. |
 | **Dashboard** | `/dashboard` | Shift summary, cumulative exposure statistics, and recent activity. |
 | **History** | `/history` | Full log of previous scans with search, filtering, and status badges. |
 | **Scan Details** | `/scan/[id]` | Deep dive into a specific scan, formula proofs, and image overlays. |
-| **Methodology** | `/methodology` | Scientific foundation, Fick's Law math, and calibration domain. |
+| **Methodology** | `/methodology` | Scientific foundation, 35mm anchor calibration, and Fick's Law math. |
 | **Profile** | `/profile` | Worker name, ID, organization, and local data export/clear. |
 | **About** | `/about` | Project mission, design rationale, and prototype status. |
 
@@ -124,40 +158,11 @@ The platform opens **directly** to the full system — no login screen or passwo
 
 ---
 
-## 🔬 Scientific Foundations & Dosimetry Model
-
-### Fick's First Law of Diffusion
-The passive sampling uptake rate $U$ is governed by:
-```
-U = (D × A) / L
-```
-- **Diffusion Coefficient ($D$):** 0.176 cm²/s (H₂S in air)
-- **Inlet Area ($A$):** 1.0 cm² (funneled 4:1 into 0.25 cm² reaction lane)
-- **Diffusion Path Length ($L$):** 0.50 cm
-- **Theoretical Uptake Rate ($U$):** 0.352 cm³/s ≈ 21.1 mL/min
-
-### Dose Calculation Formula
-```
-Dose (ppm·hr) = Length_A × α × R
-```
-- **$\alpha$:** 0.5 ppm·hr/mm (empirical calibration constant)
-- **$R$:** Length_A / Length_B (ratiometric humidity factor)
-
-### Calibration & Validation Domain
-Derived from a 34-run Face-Centred Central Composite Design (CCD):
-- **Dose Range:** 2.0 to 80.0 ppm·hr
-- **Temperature:** 15°C to 35°C
-- **Relative Humidity:** 20% to 80% RH
-- **Limit of Detection Target:** ≤ 4 ppm·hr
-- **Expanded Uncertainty ($k=2$):** ±19.4% (referenced to ASTM D4599 & IS 5182 Part 7)
-
----
-
 ## ⚠️ Industrial Safety & Prototype Notice
 
-AEGIS-BAND v2 is an engineering research and software prototype designed for industrial exposure tracking and demonstration. All parameters and performance targets represent project specifications and stated validation criteria.
+Irisathenas Band is an engineering research and software prototype designed for industrial exposure tracking and demonstration. All parameters and performance targets represent project specifications and stated validation criteria.
 
 ---
 
-**AEGIS-BAND v2 — Industrial H₂S Safety Technology**  
+**Irisathenas Band — Industrial H₂S Safety Technology**  
 *"We measure a distance, not a colour."*

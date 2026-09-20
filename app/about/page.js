@@ -22,7 +22,7 @@ export default function AboutPage() {
           }}>
             <Shield size={40} />
           </div>
-          <h1 style={{ marginBottom: 12 }}>About AEGIS-BAND v2</h1>
+          <h1 style={{ marginBottom: 12 }}>About Irisathenas Band</h1>
           <p style={{ fontSize: '1.1rem', color: 'var(--color-text-secondary)' }}>
             Passive H₂S Dosimetry Wristband
           </p>
@@ -31,7 +31,7 @@ export default function AboutPage() {
         <section className="card" style={{ marginBottom: 32 }}>
           <h2>Project Overview</h2>
           <p>
-            AEGIS-BAND v2 is a disposable, electronics-free, battery-free passive H₂S dosimetry wristband
+            Irisathenas Band is a disposable, electronics-free, battery-free passive H₂S dosimetry wristband
             that measures accumulated hydrogen sulfide exposure through chemical reaction-front distance measurement
             rather than traditional color intensity analysis.
           </p>
@@ -47,7 +47,7 @@ export default function AboutPage() {
           <h3>"We Measure a Distance, Not a Colour"</h3>
           <p>
             Traditional colorimetric dosimetry is vulnerable to lighting variations, color temperature,
-            white balance, metamerism, and LED spectral drift. AEGIS-BAND instead measures the
+            white balance, metamerism, and LED spectral drift. Irisathenas Band instead measures the
             <strong> spatial advance of a chemical reaction front</strong> against printed fiducial markers,
             providing a more robust and repeatable measurement.
           </p>
@@ -113,7 +113,7 @@ export default function AboutPage() {
           <div className="alert alert-warning">
             <h4 style={{ marginTop: 0 }}>⚠️ Research Prototype</h4>
             <p style={{ marginBottom: 0 }}>
-              AEGIS-BAND v2 is an <strong>engineering/research/software prototype</strong> unless independently
+              Irisathenas Band is an <strong>engineering/research/software prototype</strong> unless independently
               validated and certified. It is <strong>NOT a legally certified gas detector or personal protective device</strong>.
             </p>
           </div>
@@ -140,7 +140,7 @@ export default function AboutPage() {
         <section className="card">
           <h2>Contact & Support</h2>
           <p>
-            For questions about AEGIS-BAND v2, project methodology, or technical implementation:
+            For questions about Irisathenas Band, project methodology, or technical implementation:
           </p>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 20 }}>
             <Link href="/methodology" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>

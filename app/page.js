@@ -34,7 +34,7 @@ export default function LandingPage() {
             letterSpacing: '-1px',
             marginBottom: 16,
           }}>
-            AEGIS-BAND v2
+            Irisathenas Band
           </h1>
 
           <p style={{
@@ -219,7 +219,7 @@ export default function LandingPage() {
             <h4 style={{ marginBottom: 12 }}>⚠️ Important Notice</h4>
             <p style={{ margin: 0 }}>
               This is an <strong>engineering/research/software prototype</strong> unless independently validated and certified.
-              Do NOT present AEGIS-BAND as a legally certified gas detector or personal protective device.
+              Do NOT present Irisathenas Band as a legally certified gas detector or personal protective device.
               All performance claims represent project specifications and stated validation targets,
               not independently certified real-world measurements.
             </p>
@@ -228,7 +228,7 @@ export default function LandingPage() {
 
         {/* CTA */}
         <section style={{ textAlign: 'center', padding: '40px 20px', background: 'var(--color-surface)', borderRadius: 12 }}>
-          <h3 style={{ marginBottom: 12 }}>Ready to scan an AEGIS-BAND?</h3>
+          <h3 style={{ marginBottom: 12 }}>Ready to scan an Irisathenas Band?</h3>
           <p style={{ color: 'var(--color-text-secondary)', marginBottom: 24 }}>
             Take a photo of any exposure wristband to calculate accumulated H₂S dose immediately.
           </p>
@@ -248,7 +248,7 @@ export default function LandingPage() {
         fontSize: 14,
       }}>
         <p style={{ marginBottom: 12 }}>
-          AEGIS-BAND v2 — Passive H₂S Dosimetry Wristband
+          Irisathenas Band — Passive H₂S Dosimetry Wristband
         </p>
         <p style={{ marginBottom: 12 }}>
           <Link href="/methodology" style={{ margin: '0 12px' }}>Methodology</Link>

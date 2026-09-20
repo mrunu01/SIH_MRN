@@ -12,7 +12,7 @@ export default function MethodologyPage() {
         <div style={{ marginBottom: 40 }}>
           <h1 style={{ marginBottom: 8 }}>Methodology</h1>
           <p style={{ color: 'var(--color-text-secondary)' }}>
-            Scientific principles and formulas behind AEGIS-BAND v2
+            Scientific principles and formulas behind Irisathenas Band
           </p>
         </div>
 
@@ -37,9 +37,9 @@ export default function MethodologyPage() {
           </div>
           <p style={{ fontSize: '1.1rem', lineHeight: 1.6 }}>
             Traditional colorimetric dosimetry suffers from ambient illumination, white balance,
-            color temperature variations, metamerism, and LED spectral drift. AEGIS-BAND v2
+            color temperature variations, metamerism, and LED spectral drift. Irisathenas Band
             instead measures the <strong>spatial advance of a reaction front</strong> —
-            a distance-based measurement using printed fiducial markers and smartphone edge detection.
+            a distance-based measurement using printed fiducial markers and adaptive computer vision edge detection.
           </p>
         </section>
 
@@ -131,7 +131,7 @@ export default function MethodologyPage() {
           </div>
 
           <p>
-            AEGIS-BAND uses <strong>passive diffusive sampling</strong> — no pump, no battery, no electronics.
+            Irisathenas Band uses <strong>passive diffusive sampling</strong> — no pump, no battery, no electronics.
             H₂S molecules naturally diffuse from high concentration (ambient air) to low concentration
             (inside the band) according to Fick's First Law of Diffusion.
           </p>
@@ -214,7 +214,7 @@ export default function MethodologyPage() {
           <h2 style={{ marginBottom: 20 }}>Ratiometric Humidity Correction</h2>
 
           <p>
-            Humidity can affect chemical reaction rates. AEGIS-BAND v2 uses a <strong>two-lane ratiometric design</strong>
+            Humidity can affect chemical reaction rates. Irisathenas Band uses a <strong>two-lane ratiometric design</strong>
             to reduce humidity sensitivity:
           </p>
 
@@ -228,9 +228,8 @@ export default function MethodologyPage() {
             <div style={{ fontFamily: 'monospace', fontSize: '1.5rem', margin: '20px 0', color: 'var(--color-primary)' }}>
               R = Length A / Length B
             </div>
-            <p style={{ marginBottom: 0 }}>
-              The <strong>ratio</strong> of the two reaction-front lengths partially cancels out humidity effects,
-              providing a more robust dose measurement across varying environmental conditions.
+            <p style={{ color: 'var(--color-text-secondary)', marginBottom: 0 }}>
+              The ratio R acts as an environmental correction factor in the dose calculation.
             </p>
           </div>
         </section>
@@ -251,12 +250,12 @@ export default function MethodologyPage() {
               <ShieldAlert size={24} />
             </div>
             <div>
-              <h2 style={{ margin: 0 }}>Lane R: Fail-Closed Integrity Check</h2>
+              <h2 style={{ margin: 0 }}>Fail-Closed Integrity (Lane R)</h2>
             </div>
           </div>
 
           <p>
-            <strong>Lane R</strong> is a foil-sealed integrity verification lane that should remain
+            Lane R is hermetically foil-sealed during manufacturing. It should remain
             <strong> clean and unreacted</strong> throughout normal operation. This is a
             <strong> poka-yoke (mistake-proofing)</strong> mechanism:
           </p>
@@ -295,16 +294,57 @@ export default function MethodologyPage() {
               <TrendingUp size={24} />
             </div>
             <div>
-              <h2 style={{ margin: 0 }}>Calibration & Validation</h2>
+              <h2 style={{ margin: 0 }}>Calibration & Theoretical Linear Loading</h2>
             </div>
           </div>
 
-          <h3>34-Run Face-Centred Central Composite Design (CCD)</h3>
+          <h3>Theoretical Calibration Table (Anchor Point: 35.0 mm = 8.0 ppm·hr)</h3>
           <p>
-            The project specification describes a systematic calibration study across the following test domain:
+            Irisathenas Band converts reaction front distance to cumulative exposure dose assuming constant linear loading with an anchor calibration of:
           </p>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16, marginTop: 20 }}>
+          <div style={{
+            padding: 20,
+            background: 'var(--color-bg)',
+            borderRadius: 8,
+            textAlign: 'center',
+            fontFamily: 'monospace',
+            fontSize: '1.25rem',
+            margin: '16px 0',
+            color: 'var(--color-primary)',
+          }}>
+            Sensitivity S = 4.375 mm / (ppm·hr) &nbsp;|&nbsp; α = 0.22857 (ppm·hr)/mm
+          </div>
+
+          <div className="table-container" style={{ margin: '20px 0' }}>
+            <table>
+              <thead>
+                <tr>
+                  <th>Dose (ppm·hr)</th>
+                  <th>Estimated Stain Length (mm)</th>
+                  <th>Notes</th>
+                </tr>
+              </thead>
+              <tbody>
+                {PROJECT_CONFIG.calibrationTable.map((row) => (
+                  <tr
+                    key={row.dose}
+                    style={{
+                      background: row.anchor ? 'rgba(0, 102, 204, 0.12)' : undefined,
+                      fontWeight: row.anchor ? 600 : undefined,
+                    }}
+                  >
+                    <td>{row.dose}</td>
+                    <td>{row.length.toFixed(1)}</td>
+                    <td>{row.anchor ? '★ Anchor Point (Project Reference)' : 'Theoretical Linear Advance'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <h4 style={{ marginTop: 24 }}>Validation Domain (34-Run CCD)</h4>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16, marginTop: 16 }}>
             <div style={{ padding: 16, background: 'var(--color-bg)', borderRadius: 8 }}>
               <div style={{ fontSize: 13, color: 'var(--color-text-secondary)', marginBottom: 4 }}>Dose Range</div>
               <div style={{ fontSize: '1.25rem', fontWeight: 600 }}>
@@ -342,58 +382,58 @@ export default function MethodologyPage() {
 
           <div className="alert alert-warning" style={{ marginTop: 20 }}>
             <strong>Important:</strong> These are <strong>project specifications and stated validation targets</strong>,
-            not independently certified performance claims. AEGIS-BAND v2 is a research/engineering prototype
+            not independently certified performance claims. Irisathenas Band is a research/engineering prototype
             unless independently validated and certified.
           </div>
         </section>
 
         {/* Measurement Workflow */}
         <section className="card" style={{ marginBottom: 40 }}>
-          <h2 style={{ marginBottom: 20 }}>Smartphone Measurement Workflow</h2>
+          <h2 style={{ marginBottom: 20 }}>Measurement Workflow with Adaptive Floating Lines</h2>
 
           <ol style={{ lineHeight: 2, paddingLeft: 24 }}>
-            <li>Worker wears disposable AEGIS-BAND wristband during exposure period</li>
+            <li>Worker wears disposable Irisathenas Band wristband during exposure period</li>
             <li>H₂S diffuses into band, chemical reaction advances proportionally to dose</li>
-            <li>At end of shift, worker photographs band with smartphone camera</li>
-            <li>App detects printed fiducial markers for spatial calibration</li>
-            <li>Edge detection identifies reaction fronts in Lanes A and B</li>
-            <li>Distance measurements converted from pixels to millimeters</li>
-            <li>Lane R integrity verified (must be clean)</li>
+            <li>At end of shift, worker photographs band with smartphone or webcam</li>
+            <li>App automatically detects orientation tilt angle and aligns floating overlay lines</li>
+            <li>User can interactively fine-tune the tilt angle to perfectly overlap the physical lanes</li>
+            <li>Edge detection measures reaction front displacement in Lanes A and B along the rotated axis</li>
+            <li>Distance measurements converted from pixels to millimeters against 50mm fiducial span</li>
+            <li>Lane R integrity verified (must be clean and unreacted)</li>
             <li>Ratiometric correction (A/B ratio) calculated</li>
-            <li>Dose calculated using calibration parameters and formulas</li>
-            <li>Result stored securely with full audit trail</li>
+            <li>Cumulative dose calculated using the 35mm anchor calibration formula</li>
+            <li>Record saved locally in browser storage</li>
           </ol>
         </section>
 
         {/* System Architecture */}
         <section className="card" style={{ marginBottom: 40 }}>
-          <h2 style={{ marginBottom: 20 }}>Three-Tier System Architecture</h2>
+          <h2 style={{ marginBottom: 20 }}>Architecture & Implementation</h2>
 
           <div style={{ display: 'grid', gap: 16 }}>
             <div style={{ padding: 20, background: 'var(--color-bg)', borderRadius: 8 }}>
-              <h3 style={{ marginTop: 0, color: 'var(--color-primary)' }}>Tier 1: Worker-Borne</h3>
+              <h3 style={{ marginTop: 0, color: 'var(--color-primary)' }}>Tier 1: Worker-Borne Hardware</h3>
               <ul style={{ marginBottom: 0, paddingLeft: 20 }}>
-                <li>Disposable AEGIS-BAND wristband</li>
+                <li>Disposable Irisathenas Band wristband</li>
                 <li>No electronics, no battery, no charging burden</li>
-                <li>Passive chemistry</li>
+                <li>Passive Fickian diffusion chemistry</li>
               </ul>
             </div>
 
             <div style={{ padding: 20, background: 'var(--color-bg)', borderRadius: 8 }}>
-              <h3 style={{ marginTop: 0, color: 'var(--color-success)' }}>Tier 2: Edge/Fog (Smartphone)</h3>
+              <h3 style={{ marginTop: 0, color: 'var(--color-success)' }}>Tier 2: Edge Browser CV Engine</h3>
               <ul style={{ marginBottom: 0, paddingLeft: 20 }}>
-                <li>Primary readout path</li>
-                <li>Fiducial normalization and edge detection</li>
-                <li>Digital recording and initial processing</li>
+                <li>Primary readout path via HTML5 Canvas and mobile camera</li>
+                <li>Automated tilt angle estimation and adaptive floating overlay guides</li>
+                <li>Spatial reaction front edge detection along rotated channels</li>
               </ul>
             </div>
 
             <div style={{ padding: 20, background: 'var(--color-bg)', borderRadius: 8 }}>
-              <h3 style={{ marginTop: 0, color: 'var(--color-warning)' }}>Tier 3: Cloud/EHS Dashboard</h3>
+              <h3 style={{ marginTop: 0, color: 'var(--color-warning)' }}>Tier 3: Local Dashboard & Analytics</h3>
               <ul style={{ marginBottom: 0, paddingLeft: 20 }}>
-                <li>Centralized exposure tracking</li>
-                <li>Audit trails and compliance reporting</li>
-                <li>Batch checking and analytics</li>
+                <li>100% private, client-side storage</li>
+                <li>Shift summaries, historical trends, and audit records</li>
               </ul>
             </div>
           </div>
@@ -403,7 +443,7 @@ export default function MethodologyPage() {
         <div className="alert alert-warning">
           <h4 style={{ marginTop: 0 }}>⚠️ Research Prototype Disclaimer</h4>
           <p style={{ marginBottom: 0 }}>
-            AEGIS-BAND v2 is an <strong>engineering/research/software prototype</strong> unless
+            Irisathenas Band is an <strong>engineering/research/software prototype</strong> unless
             independently validated and certified. Do NOT present it as a legally certified gas detector
             or personal protective device. All performance claims, formulas, and calculations represent
             <strong>project specifications and stated validation targets</strong>, not independently
