@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { History as HistoryIcon, Search, Filter, Calendar, ArrowRight, CheckCircle, XCircle, AlertTriangle } from 'lucide-react'
 import Navbar from '@/components/Navbar'
-import { getAllScans } from '@/lib/storage/localStorage'
+import { getAllScans, fetchCloudScans } from '@/lib/storage/localStorage'
 
 export default function HistoryPage() {
   const [scans, setScans] = useState([])
@@ -21,6 +21,14 @@ export default function HistoryPage() {
     setScans(localScans)
     setFilteredScans(localScans)
     setLoading(false)
+
+    // Load latest scans from Supabase Cloud
+    fetchCloudScans().then((cloudScans) => {
+      if (cloudScans && cloudScans.length > 0) {
+        setScans(cloudScans)
+        setFilteredScans(cloudScans)
+      }
+    })
   }, [])
 
   useEffect(() => {

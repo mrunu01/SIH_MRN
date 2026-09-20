@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import {
   Home,
   Camera,
@@ -12,12 +12,17 @@ import {
   Menu,
   X,
   Shield,
-  LayoutDashboard
+  LayoutDashboard,
+  LogIn,
+  LogOut,
 } from 'lucide-react'
+import { useAuth } from '@/lib/context/AuthContext'
 
 export default function Navbar() {
   const [isOpen, setIsOpen] = useState(false)
   const pathname = usePathname()
+  const router = useRouter()
+  const { user, profile, signOut } = useAuth()
 
   const navItems = [
     { href: '/', label: 'Home', icon: Home },
@@ -29,6 +34,11 @@ export default function Navbar() {
   ]
 
   const isActive = (href) => pathname === href
+
+  const handleSignOut = async () => {
+    await signOut()
+    router.push('/login')
+  }
 
   return (
     <nav style={{
@@ -78,7 +88,7 @@ export default function Navbar() {
                   display: 'inline-flex',
                   alignItems: 'center',
                   gap: 6,
-                  padding: '8px 14px',
+                  padding: '8px 12px',
                   borderRadius: 6,
                   textDecoration: 'none',
                   color: isActive(item.href) ? 'var(--color-primary)' : 'var(--color-text-secondary)',
@@ -96,10 +106,67 @@ export default function Navbar() {
             <Link
               href="/new-scan"
               className="btn btn-primary btn-sm"
-              style={{ marginLeft: 8 }}
+              style={{ marginLeft: 6 }}
             >
               <Camera size={14} /> Scan Now
             </Link>
+
+            {/* Auth Button */}
+            {user ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 10 }}>
+                <Link
+                  href="/profile"
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    padding: '5px 10px',
+                    borderRadius: 6,
+                    background: 'var(--color-bg)',
+                    border: '1px solid var(--color-border)',
+                    textDecoration: 'none',
+                    color: 'var(--color-text)',
+                    fontSize: 12,
+                    fontWeight: 600,
+                  }}
+                  title={user.email}
+                >
+                  <span style={{
+                    width: 8,
+                    height: 8,
+                    borderRadius: '50%',
+                    background: '#10b981',
+                    display: 'inline-block',
+                  }} />
+                  {profile?.full_name?.split(' ')[0] || user.email?.split('@')[0]}
+                </Link>
+                <button
+                  type="button"
+                  onClick={handleSignOut}
+                  title="Sign Out"
+                  style={{
+                    background: 'transparent',
+                    border: '1px solid var(--color-border)',
+                    borderRadius: 6,
+                    padding: '6px 8px',
+                    cursor: 'pointer',
+                    color: 'var(--color-text-secondary)',
+                    display: 'flex',
+                    alignItems: 'center',
+                  }}
+                >
+                  <LogOut size={14} />
+                </button>
+              </div>
+            ) : (
+              <Link
+                href="/login"
+                className="btn btn-secondary btn-sm"
+                style={{ marginLeft: 8, display: 'flex', alignItems: 'center', gap: 4 }}
+              >
+                <LogIn size={14} /> Sign In
+              </Link>
+            )}
           </div>
 
           {/* Mobile Menu Button */}
@@ -144,6 +211,28 @@ export default function Navbar() {
                 {item.label}
               </Link>
             ))}
+
+            <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--color-border)' }}>
+              {user ? (
+                <button
+                  type="button"
+                  onClick={() => { setIsOpen(false); handleSignOut() }}
+                  className="btn btn-secondary btn-sm"
+                  style={{ width: '100%', justifyContent: 'center' }}
+                >
+                  <LogOut size={16} /> Sign Out ({user.email})
+                </button>
+              ) : (
+                <Link
+                  href="/login"
+                  onClick={() => setIsOpen(false)}
+                  className="btn btn-primary btn-sm"
+                  style={{ width: '100%', justifyContent: 'center' }}
+                >
+                  <LogIn size={16} /> Sign In / Register
+                </Link>
+              )}
+            </div>
           </div>
         )}
       </div>

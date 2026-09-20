@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { ArrowLeft, Calendar, Clock, AlertTriangle, CheckCircle, XCircle, Download, Trash2, Image as ImageIcon } from 'lucide-react'
 import Navbar from '@/components/Navbar'
-import { getScanById, deleteScan } from '@/lib/storage/localStorage'
+import { getScanById, deleteScan, fetchCloudScanById } from '@/lib/storage/localStorage'
 import { PROJECT_CONFIG } from '@/lib/config/project'
 
 export default function ScanDetailPage({ params }) {
@@ -22,7 +22,11 @@ export default function ScanDetailPage({ params }) {
       const resolvedParams = await params
       const scanId = resolvedParams.id
 
-      const scanData = getScanById(scanId)
+      let scanData = getScanById(scanId)
+      if (!scanData) {
+        scanData = await fetchCloudScanById(scanId)
+      }
+
       if (!scanData) {
         router.push('/history')
         return

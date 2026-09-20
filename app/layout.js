@@ -1,4 +1,5 @@
 import '../styles/globals.css'
+import { AuthProvider } from '@/lib/context/AuthContext'
 
 export const metadata = {
   title: 'Irisathenas Band | Passive H₂S Dosimetry',
@@ -16,7 +17,11 @@ export default function RootLayout({ children }) {
       <head>
         <link rel="icon" href="/favicon.ico" />
       </head>
-      <body>{children}</body>
+      <body>
+        <AuthProvider>
+          {children}
+        </AuthProvider>
+      </body>
     </html>
   )
 }

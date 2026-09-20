@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Camera, History, AlertTriangle, CheckCircle, XCircle, Clock, ArrowRight } from 'lucide-react'
 import Navbar from '@/components/Navbar'
-import { getAllScans, getProfile } from '@/lib/storage/localStorage'
+import { getAllScans, getProfile, fetchCloudScans } from '@/lib/storage/localStorage'
 
 export default function DashboardPage() {
   const [profile, setProfile] = useState(null)
@@ -19,6 +19,13 @@ export default function DashboardPage() {
     setProfile(userProfile)
     setScans(localScans)
     setLoading(false)
+
+    // Load latest scans from Supabase Cloud
+    fetchCloudScans().then((cloudScans) => {
+      if (cloudScans && cloudScans.length > 0) {
+        setScans(cloudScans)
+      }
+    })
   }, [])
 
   if (loading) {
