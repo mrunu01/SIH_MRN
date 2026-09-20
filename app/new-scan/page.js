@@ -940,7 +940,7 @@ export default function NewScanPage() {
                   {doseResult.dose?.toFixed(2)} <span style={{ fontSize: '1.25rem', fontWeight: 400 }}>ppm·hr</span>
                 </div>
                 <div style={{ fontSize: 14, color: 'var(--color-text-secondary)', marginTop: 6 }}>
-                  Anchor Reference: 35.0 mm = 8.0 ppm·hr ($S = 4.375\text{ mm/ppm}\cdot\text{hr}$)
+                  Anchor Reference: 35.0 mm = 8.0 ppm·hr (S = 4.375 mm/(ppm·hr))
                 </div>
                 {doseResult.integrityStatus === 'FAIL' && (
                   <div className="badge badge-error" style={{ marginTop: 12 }}>
