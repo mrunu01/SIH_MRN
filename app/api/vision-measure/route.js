@@ -2,27 +2,40 @@ import { NextResponse } from 'next/server'
 import { VISION_API_KEY, GROQ_MODEL, GEMINI_MODEL } from '@/lib/config/vision'
 
 export const dynamic = 'force-dynamic'
-export const maxDuration = 30 // Allow up to 30s timeout on serverless if needed
+export const maxDuration = 30
 
-const SYSTEM_VISION_PROMPT = `You are a high-precision optical metrology instrument reader.
-Look closely at the 3 horizontal strips inside the watch face and the millimeter ruler (0 to 30 mm / 50 mm common scale) directly below them.
-Each strip has a colored gradient bar (purple to yellow) extending from the left starting mark (0 mm) to a specific point on the ruler.
+const SYSTEM_VISION_PROMPT = `You are an expert optical measurement reader for passive H₂S dosimetry badges.
 
-Examine the right edge of each strip's gradient bar by projecting straight down to the printed ruler ticks:
-1. Strip 1 (High Humident - Top Strip): Examine the right edge of this colored bar against the ruler ticks. (e.g. 15.0 mm).
-2. Strip 2 (Low Humident - Middle Strip): Examine the right edge of this colored bar against the ruler ticks. (e.g. 10.0 mm).
-3. Strip 3 (Integrity - Bottom Strip): Examine the right edge of this colored bar against the ruler ticks. (e.g. 20.0 mm or 0.0 mm).
-4. CRITICAL INTEGRITY RULE: Strip 3 (Lane R) is a sealed blank control strip. It MUST be 0.0 mm to PASS. If Strip 3 has ANY visible color front or length > 0.0 mm (e.g. 20 mm), integrity_status MUST BE "FAIL". Integrity status can ONLY be "PASS" if Strip 3 length is 0.0 mm.
+This image shows a wristwatch-style badge with a dial/face containing:
+- Three horizontal colored strips (bars) stacked vertically, labeled A, B, R (top to bottom)
+- A printed millimeter ruler scale at the bottom of the dial (marked 0, 5, 10, 15, 20, 25, 30 mm or up to 50 mm)
 
-Respond ONLY with a valid JSON object matching this exact schema:
+Each strip contains a colored stain (purple/pink/orange gradient) that starts from the left edge (0 mm mark) and extends rightward to some point along the ruler.
+
+YOUR TASK: For each strip, measure where the RIGHT EDGE (leading front) of the colored stain falls on the mm ruler.
+
+MEASUREMENT PROCEDURE:
+1. Look at Strip A (top, labeled "High Humident" or "A"): Find where the colored region ends. Project straight down to the ruler. Read the mm value.
+2. Look at Strip B (middle, labeled "Low Humident" or "B"): Find where the colored region ends. Project straight down to the ruler. Read the mm value.
+3. Look at Strip R (bottom, labeled "Integrity" or "R"): Find where the colored region ends. Project straight down to the ruler. Read the mm value. If this strip has NO color/stain at all (completely white/blank), report 0.0 mm.
+
+CRITICAL RULES:
+- Read the ACTUAL ruler tick marks visible in the image. Do NOT guess or hallucinate values.
+- Each mm on the ruler corresponds to a printed tick mark. Count the ticks carefully.
+- If a strip's stain front falls BETWEEN two tick marks, interpolate (e.g., 12.5 mm).
+- For Strip R (Integrity): If there is ANY visible stain/color (length > 0 mm), set integrity_status to "FAIL".
+  Only if Strip R is completely blank/white/unstained (0.0 mm), set integrity_status to "PASS".
+- If the image is blank, has no strips, or is unreadable, set all values to 0.0 and confidence to 0.5.
+
+Respond ONLY with valid JSON:
 {
-  "laneA_mm": <number between 0.0 and 50.0>,
-  "laneB_mm": <number between 0.0 and 50.0>,
-  "laneR_mm": <number between 0.0 and 50.0>,
+  "laneA_mm": <number 0.0 to 50.0>,
+  "laneB_mm": <number 0.0 to 50.0>,
+  "laneR_mm": <number 0.0 to 50.0>,
   "integrity_status": "PASS" or "FAIL",
   "tilt_angle_deg": 0.0,
-  "confidence": <number between 0.5 and 1.0>,
-  "notes": "<explain the millimeter tick reading for each strip>"
+  "confidence": <number 0.5 to 1.0>,
+  "notes": "<brief explanation of how you read each strip against the ruler ticks>"
 }`
 
 export async function POST(req) {
@@ -37,7 +50,6 @@ export async function POST(req) {
       )
     }
 
-    // Determine API key: check lib/config/vision.js first, then environment variables, then client
     const apiKey = (VISION_API_KEY && VISION_API_KEY.trim()) ||
       process.env.GROQ_API_KEY ||
       process.env.GEMINI_API_KEY ||
@@ -49,13 +61,12 @@ export async function POST(req) {
         {
           success: false,
           error: 'NO_API_KEY',
-          message: 'No Vision API key configured. Please provide a Groq or Gemini API key in settings or environment.',
+          message: 'No Vision API key configured.',
         },
         { status: 400 }
       )
     }
 
-    // Detect provider based on key format
     const isGroq = apiKey.startsWith('gsk_') || (!apiKey.startsWith('AIza') && process.env.GROQ_API_KEY)
     const isGemini = apiKey.startsWith('AIza')
 
@@ -70,15 +81,16 @@ export async function POST(req) {
       parsedResult = await callGeminiVision(apiKey, image)
     }
 
-    // Sanitize and clamp values to 0.0 - 50.0 mm
+    // Sanitize and clamp
     const laneA_mm = Math.max(0.0, Math.min(50.0, Math.round((parseFloat(parsedResult.laneA_mm) || 0.0) * 10) / 10))
     const laneB_mm = Math.max(0.0, Math.min(50.0, Math.round((parseFloat(parsedResult.laneB_mm) || 0.0) * 10) / 10))
     const laneR_mm = Math.max(0.0, Math.min(50.0, Math.round((parseFloat(parsedResult.laneR_mm) || 0.0) * 10) / 10))
-    // Poka-yoke rule: Strip 3 (Lane R) MUST be 0 mm to pass. Any stain > 0 mm means seal breached -> FAIL.
-    const isIntegrityPass = laneR_mm <= 0.0 && parsedResult.integrity_status !== 'FAIL'
-    const integrity_status = isIntegrityPass ? 'PASS' : 'FAIL'
+
+    // Poka-yoke: Lane R MUST be 0 mm to pass
+    const integrity_status = (laneR_mm <= 0.0 && parsedResult.integrity_status !== 'FAIL') ? 'PASS' : 'FAIL'
+
     const tilt_angle_deg = Math.max(-90, Math.min(90, Math.round((parseFloat(parsedResult.tilt_angle_deg) || 0.0) * 10) / 10))
-    const confidence = Math.max(0.5, Math.min(1.0, parseFloat(parsedResult.confidence) || 0.95))
+    const confidence = Math.max(0.5, Math.min(1.0, parseFloat(parsedResult.confidence) || 0.85))
 
     return NextResponse.json({
       success: true,
@@ -90,7 +102,7 @@ export async function POST(req) {
         integrity_status,
         tilt_angle_deg,
         confidence,
-        notes: parsedResult.notes || `Read against common 0–50mm scale (${providerName})`,
+        notes: parsedResult.notes || `Read against printed ruler (${providerName})`,
       },
     })
   } catch (err) {
@@ -99,16 +111,13 @@ export async function POST(req) {
       {
         success: false,
         error: 'VISION_API_FAILED',
-        message: err.message || 'Vision AI measurement failed',
+        message: err.message || 'Vision measurement failed. Check API key and try again.',
       },
       { status: 500 }
     )
   }
 }
 
-/**
- * Call Groq Cloud Vision (qwen/qwen3.8-27b)
- */
 async function callGroqVision(apiKey, imageData) {
   const imageUrl = imageData.startsWith('data:')
     ? imageData
@@ -129,21 +138,20 @@ async function callGroqVision(apiKey, imageData) {
             { type: 'text', text: SYSTEM_VISION_PROMPT },
             {
               type: 'image_url',
-              image_url: {
-                url: imageUrl,
-              },
+              image_url: { url: imageUrl },
             },
           ],
         },
       ],
       temperature: 0.0,
+      max_tokens: 1024,
       response_format: { type: 'json_object' },
     }),
   })
 
   if (!response.ok) {
     const errorText = await response.text()
-    throw new Error(`Groq API returned ${response.status}: ${errorText}`)
+    throw new Error(`Groq API error ${response.status}: ${errorText}`)
   }
 
   const data = await response.json()
@@ -152,15 +160,26 @@ async function callGroqVision(apiKey, imageData) {
     throw new Error('Groq returned empty response.')
   }
 
-  const cleanJson = content.replace(/^```json\s*/i, '').replace(/```\s*$/i, '').trim()
-  return JSON.parse(cleanJson)
+  // Handle potential thinking tags from Qwen
+  let jsonContent = content
+  // Remove <think>...</think> tags if present
+  jsonContent = jsonContent.replace(/<think>[\s\S]*?<\/think>/gi, '').trim()
+  // Remove markdown code fences
+  jsonContent = jsonContent.replace(/^```json\s*/i, '').replace(/```\s*$/i, '').trim()
+
+  try {
+    return JSON.parse(jsonContent)
+  } catch (parseErr) {
+    // Try to extract JSON from mixed content
+    const jsonMatch = jsonContent.match(/\{[\s\S]*\}/)
+    if (jsonMatch) {
+      return JSON.parse(jsonMatch[0])
+    }
+    throw new Error(`Failed to parse Groq response as JSON: ${jsonContent.slice(0, 200)}`)
+  }
 }
 
-/**
- * Call Google Gemini 1.5 Flash Vision API
- */
 async function callGeminiVision(apiKey, imageData) {
-  // Strip data:image/...;base64, prefix if present
   let base64Data = imageData
   let mimeType = 'image/jpeg'
 
@@ -200,7 +219,7 @@ async function callGeminiVision(apiKey, imageData) {
 
   if (!response.ok) {
     const errorText = await response.text()
-    throw new Error(`Gemini API returned ${response.status}: ${errorText}`)
+    throw new Error(`Gemini API error ${response.status}: ${errorText}`)
   }
 
   const data = await response.json()
@@ -209,7 +228,6 @@ async function callGeminiVision(apiKey, imageData) {
     throw new Error('Gemini returned empty response.')
   }
 
-  // Clean markdown backticks if any
   const cleanJson = candidateText.replace(/^```json\s*/i, '').replace(/```\s*$/i, '').trim()
   return JSON.parse(cleanJson)
 }

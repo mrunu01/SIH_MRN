@@ -232,9 +232,15 @@ export default function NewScanPage() {
         const m = aiResult.measurements
         const detectedAngle = m.tilt_angle_deg || 0
         const angleRad = (detectedAngle * Math.PI) / 180
-        const spanPixels = detector.width * 0.84
-        const pxPerMM = spanPixels / 50.0
 
+        // Use the exact same geometry pipeline as BandDetector for consistent overlay alignment
+        const bandRegion = detector.detectRotatedBandRegion(angleRad, { x: 0, y: 0 }, 1.0)
+        const fiducials = detector.detectRotatedFiducials(bandRegion, angleRad)
+        const lanes = detector.detectRotatedLanes(bandRegion, angleRad)
+        const pxPerMM = fiducials.pixelsPerMM
+        const spanPixels = fiducials.spanPixels
+
+        const isIntegrityPass = m.laneR_mm <= 0.0 && m.integrity_status !== 'FAIL'
         const aiMeasurements = {
           laneA: {
             lengthMM: m.laneA_mm,
@@ -250,8 +256,8 @@ export default function NewScanPage() {
           },
           laneR: {
             lengthMM: m.laneR_mm,
-            integrity: (m.laneR_mm <= 0.0 && m.integrity_status === 'PASS') ? 'PASS' : 'FAIL',
-            status: (m.laneR_mm <= 0.0 && m.integrity_status === 'PASS') ? 'PASS (Intact)' : 'FAIL (Compromised)',
+            integrity: isIntegrityPass ? 'PASS' : 'FAIL',
+            status: isIntegrityPass ? 'PASS (Intact)' : 'FAIL (Compromised)',
             detected: true,
             frontStepPixels: m.laneR_mm * pxPerMM,
           },
@@ -262,9 +268,6 @@ export default function NewScanPage() {
           pixelsPerMM: pxPerMM,
         }
 
-        const bandRegion = detector.detectRotatedBandRegion(angleRad, { x: 0, y: 0 }, 1.0)
-        const fiducials = detector.detectRotatedFiducials(bandRegion, angleRad)
-        const lanes = detector.detectRotatedLanes(bandRegion, angleRad)
         const annotatedCanvas = detector.createAnnotatedImage(
           { measurements: aiMeasurements },
           bandRegion,
