@@ -11,8 +11,8 @@ Each strip has a colored gradient bar (purple to yellow) extending from the left
 Examine the right edge of each strip's gradient bar by projecting straight down to the printed ruler ticks:
 1. Strip 1 (High Humident - Top Strip): Examine the right edge of this colored bar against the ruler ticks. (e.g. 15.0 mm).
 2. Strip 2 (Low Humident - Middle Strip): Examine the right edge of this colored bar against the ruler ticks. (e.g. 10.0 mm).
-3. Strip 3 (Integrity - Bottom Strip): Examine the right edge of this colored bar against the ruler ticks. (e.g. 20.0 mm).
-4. Integrity status: PASS if the badge is intact and sealed, FAIL if compromised.
+3. Strip 3 (Integrity - Bottom Strip): Examine the right edge of this colored bar against the ruler ticks. (e.g. 20.0 mm or 0.0 mm).
+4. CRITICAL INTEGRITY RULE: Strip 3 (Lane R) is a sealed blank control strip. It MUST be 0.0 mm to PASS. If Strip 3 has ANY visible color front or length > 0.0 mm (e.g. 20 mm), integrity_status MUST BE "FAIL". Integrity status can ONLY be "PASS" if Strip 3 length is 0.0 mm.
 
 Respond ONLY with a valid JSON object matching this exact schema:
 {
@@ -74,7 +74,9 @@ export async function POST(req) {
     const laneA_mm = Math.max(0.0, Math.min(50.0, Math.round((parseFloat(parsedResult.laneA_mm) || 0.0) * 10) / 10))
     const laneB_mm = Math.max(0.0, Math.min(50.0, Math.round((parseFloat(parsedResult.laneB_mm) || 0.0) * 10) / 10))
     const laneR_mm = Math.max(0.0, Math.min(50.0, Math.round((parseFloat(parsedResult.laneR_mm) || 0.0) * 10) / 10))
-    const integrity_status = parsedResult.integrity_status === 'FAIL' ? 'FAIL' : 'PASS'
+    // Poka-yoke rule: Strip 3 (Lane R) MUST be 0 mm to pass. Any stain > 0 mm means seal breached -> FAIL.
+    const isIntegrityPass = laneR_mm <= 0.0 && parsedResult.integrity_status !== 'FAIL'
+    const integrity_status = isIntegrityPass ? 'PASS' : 'FAIL'
     const tilt_angle_deg = Math.max(-90, Math.min(90, Math.round((parseFloat(parsedResult.tilt_angle_deg) || 0.0) * 10) / 10))
     const confidence = Math.max(0.5, Math.min(1.0, parseFloat(parsedResult.confidence) || 0.95))
 

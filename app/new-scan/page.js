@@ -250,8 +250,8 @@ export default function NewScanPage() {
           },
           laneR: {
             lengthMM: m.laneR_mm,
-            integrity: m.integrity_status,
-            status: m.integrity_status === 'PASS' ? 'PASS (Intact)' : 'FAIL (Compromised)',
+            integrity: (m.laneR_mm <= 0.0 && m.integrity_status === 'PASS') ? 'PASS' : 'FAIL',
+            status: (m.laneR_mm <= 0.0 && m.integrity_status === 'PASS') ? 'PASS (Intact)' : 'FAIL (Compromised)',
             detected: true,
             frontStepPixels: m.laneR_mm * pxPerMM,
           },
@@ -346,12 +346,22 @@ export default function NewScanPage() {
     const mm = Math.max(0.0, Math.min(50.0, parseFloat(newLengthMM) || 0.0))
     if (!measurements) return
 
+    const roundedMM = Math.round(mm * 10) / 10
+    const isLaneR = laneKey === 'laneR'
+    const isIntegrityPass = isLaneR ? roundedMM <= 0.0 : measurements.laneR?.integrity === 'PASS'
+
     const updatedMeasurements = {
       ...measurements,
       [laneKey]: {
         ...measurements[laneKey],
-        lengthMM: Math.round(mm * 10) / 10,
-        frontStepPixels: mm * (measurements.pixelsPerMM || 10),
+        lengthMM: roundedMM,
+        frontStepPixels: roundedMM * (measurements.pixelsPerMM || 10),
+        ...(isLaneR
+          ? {
+              integrity: isIntegrityPass ? 'PASS' : 'FAIL',
+              status: isIntegrityPass ? 'PASS (Intact)' : 'FAIL (Compromised)',
+            }
+          : {}),
       },
     }
     setMeasurements(updatedMeasurements)
@@ -381,15 +391,43 @@ export default function NewScanPage() {
   // Toggle Integrity status (PASS / FAIL)
   const toggleIntegrityStatus = (status) => {
     if (!measurements?.laneR) return
+    const isPass = status === 'PASS'
+    // Poka-Yoke Rule: Strip 3 can ONLY pass if 0.0 mm. If user clicks PASS, snap length to 0 mm.
+    const updatedLength = isPass ? 0.0 : (measurements.laneR.lengthMM > 0 ? measurements.laneR.lengthMM : 10.0)
+    const pxPerMM = measurements.pixelsPerMM || 10
+
     const updated = {
       ...measurements,
       laneR: {
         ...measurements.laneR,
-        integrity: status,
-        status: status === 'PASS' ? 'PASS (Intact)' : 'FAIL (Compromised)',
+        lengthMM: updatedLength,
+        frontStepPixels: updatedLength * pxPerMM,
+        integrity: isPass ? 'PASS' : 'FAIL',
+        status: isPass ? 'PASS (Intact)' : 'FAIL (Compromised)',
       },
     }
     setMeasurements(updated)
+
+    // Re-draw rotated canvas immediately
+    if (detectorInstance && detectionResult) {
+      const angleRad = (tiltAngle * Math.PI) / 180
+      const bandRegion = detectorInstance.detectRotatedBandRegion(angleRad, { x: centerOffsetX, y: centerOffsetY }, bandScale)
+      const fiducials = detectorInstance.detectRotatedFiducials(bandRegion, angleRad)
+      const lanes = detectorInstance.detectRotatedLanes(bandRegion, angleRad)
+      const newCanvas = detectorInstance.createAnnotatedImage(
+        { ...detectionResult, measurements: updated },
+        bandRegion,
+        fiducials,
+        lanes,
+        tiltAngle,
+        angleRad
+      )
+      setDetectionResult((prev) => ({
+        ...prev,
+        measurements: updated,
+        annotatedCanvas: newCanvas,
+      }))
+    }
   }
 
   const calculateDose = () => {
@@ -1158,7 +1196,9 @@ export default function NewScanPage() {
                         </div>
                       </div>
                       <div style={{ fontSize: 12, color: measurements.laneR?.integrity === 'PASS' ? '#10b981' : '#ef4444', fontWeight: 600 }}>
-                        {measurements.laneR?.integrity === 'PASS' ? '✓ Integrity Verified: Badge is sealed and intact' : '✗ Integrity Check Failed: Badge compromised'}
+                        {measurements.laneR?.integrity === 'PASS'
+                          ? '✓ Integrity Verified: 0.0 mm (Sealed reference intact)'
+                          : `✗ Integrity FAILED: ${measurements.laneR?.lengthMM ? measurements.laneR.lengthMM.toFixed(1) + ' mm' : 'Compromised'} (Must be 0.0 mm to pass)`}
                       </div>
                     </div>
                   </div>
@@ -1171,7 +1211,7 @@ export default function NewScanPage() {
                 <DetectionStatus label="Common Scale Reference (0–50 mm)" status={detectionResult.fiducialsDetected} />
                 <DetectionStatus label="Strip 1: High Humident" status={detectionResult.lanesDetected?.A} />
                 <DetectionStatus label="Strip 2: Low Humident" status={detectionResult.lanesDetected?.B} />
-                <DetectionStatus label="Strip 3: Integrity" status={measurements.laneR?.integrity === 'PASS'} />
+                <DetectionStatus label={`Strip 3: Integrity (${measurements.laneR?.integrity === 'PASS' ? 'PASS - 0 mm' : 'FAIL - Compromised'})`} status={measurements.laneR?.integrity === 'PASS'} />
               </div>
 
               <button
