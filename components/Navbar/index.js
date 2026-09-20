@@ -25,11 +25,11 @@ export default function Navbar() {
   const { user, profile, signOut } = useAuth()
 
   const navItems = [
-    { href: '/', label: 'Home', icon: Home },
     { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { href: '/new-scan', label: 'New Scan', icon: Camera },
     { href: '/history', label: 'History', icon: History },
     { href: '/methodology', label: 'Methodology', icon: BookOpen },
+    { href: '/about', label: 'About', icon: Shield },
     { href: '/profile', label: 'Profile', icon: User },
   ]
 
