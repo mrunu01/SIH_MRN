@@ -18,6 +18,8 @@ import {
   VideoOff,
   Info,
   Ruler,
+  SwitchCamera,
+  ShieldCheck,
 } from 'lucide-react'
 import Navbar from '@/components/Navbar'
 import { saveScan as saveScanToStorage } from '@/lib/storage/localStorage'
@@ -40,6 +42,7 @@ export default function NewScanPage() {
   const [bandScale, setBandScale] = useState(1.0)
   const [showAdvancedAlign, setShowAdvancedAlign] = useState(false)
   const [isLiveCameraOpen, setIsLiveCameraOpen] = useState(false)
+  const [cameraFacingMode, setCameraFacingMode] = useState('environment') // 'environment' | 'user'
   const [cameraError, setCameraError] = useState('')
 
   const [measurements, setMeasurements] = useState(null)
@@ -69,12 +72,20 @@ export default function NewScanPage() {
     }
   }, [])
 
-  const startLiveCamera = async () => {
+  const startLiveCamera = async (facingMode = cameraFacingMode) => {
     try {
       setCameraError('')
+      if (cameraStreamRef.current) {
+        cameraStreamRef.current.getTracks().forEach((track) => track.stop())
+        cameraStreamRef.current = null
+      }
       setIsLiveCameraOpen(true)
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } },
+        video: {
+          facingMode: { ideal: facingMode },
+          width: { ideal: 1920 },
+          height: { ideal: 1080 },
+        },
         audio: false,
       })
       cameraStreamRef.current = stream
@@ -83,8 +94,16 @@ export default function NewScanPage() {
       }
     } catch (err) {
       console.error('Live camera error:', err)
-      setCameraError('Unable to access device camera directly. Please use Take Photo or Upload Image.')
+      setCameraError('Unable to access device camera directly. Please use "Take Photo (Device Camera)" or upload an image file.')
       setIsLiveCameraOpen(false)
+    }
+  }
+
+  const toggleCameraFacingMode = async () => {
+    const nextMode = cameraFacingMode === 'environment' ? 'user' : 'environment'
+    setCameraFacingMode(nextMode)
+    if (isLiveCameraOpen) {
+      await startLiveCamera(nextMode)
     }
   }
 
@@ -157,10 +176,21 @@ export default function NewScanPage() {
       setQualityResult(quality)
       setError('')
     } catch (err) {
-      setQualityResult({ status: 'PASS', width: img.naturalWidth, height: img.naturalHeight, errors: [], warnings: [], canProceed: true })
+      setQualityResult({ status: 'PASS', isBlurry: false, width: img.naturalWidth, height: img.naturalHeight, errors: [], warnings: [], canProceed: true })
     } finally {
       setLoading(false)
     }
+  }
+
+  const handleRetake = () => {
+    setStep(1)
+    setImageFile(null)
+    setImagePreview(null)
+    setImageElement(null)
+    setQualityResult(null)
+    setDetectionResult(null)
+    setMeasurements(null)
+    startLiveCamera(cameraFacingMode)
   }
 
   const performDetection = async () => {
@@ -183,7 +213,7 @@ export default function NewScanPage() {
       setBandScale(1.0)
 
       if (!result.measurements) {
-        setError('Could not detect band measurements automatically. Manual correction required.')
+        setError('Could not detect band measurements automatically. Manual confirmation available below.')
       }
 
       setStep(4)
@@ -221,6 +251,57 @@ export default function NewScanPage() {
     if (!detectorInstance) return
     const detectedAngle = detectorInstance.detectBandOrientation()
     updateDetectionAdjustment(detectedAngle, 0, 0, 1.0)
+  }
+
+  // Update strip millimeter measurement directly along the 0 to 50 mm common scale
+  const updateStripLength = (laneKey, newLengthMM) => {
+    const mm = Math.max(0.0, Math.min(50.0, parseFloat(newLengthMM) || 0.0))
+    if (!measurements) return
+
+    const updatedMeasurements = {
+      ...measurements,
+      [laneKey]: {
+        ...measurements[laneKey],
+        lengthMM: Math.round(mm * 10) / 10,
+        frontStepPixels: mm * (measurements.pixelsPerMM || 10),
+      },
+    }
+    setMeasurements(updatedMeasurements)
+
+    // Re-draw rotated canvas to immediately reflect the adjusted front line
+    if (detectorInstance && detectionResult) {
+      const angleRad = (tiltAngle * Math.PI) / 180
+      const bandRegion = detectorInstance.detectRotatedBandRegion(angleRad, { x: centerOffsetX, y: centerOffsetY }, bandScale)
+      const fiducials = detectorInstance.detectRotatedFiducials(bandRegion, angleRad)
+      const lanes = detectorInstance.detectRotatedLanes(bandRegion, angleRad)
+      const newCanvas = detectorInstance.createAnnotatedImage(
+        { ...detectionResult, measurements: updatedMeasurements },
+        bandRegion,
+        fiducials,
+        lanes,
+        tiltAngle,
+        angleRad
+      )
+      setDetectionResult((prev) => ({
+        ...prev,
+        measurements: updatedMeasurements,
+        annotatedCanvas: newCanvas,
+      }))
+    }
+  }
+
+  // Toggle Integrity status (PASS / FAIL)
+  const toggleIntegrityStatus = (status) => {
+    if (!measurements?.laneR) return
+    const updated = {
+      ...measurements,
+      laneR: {
+        ...measurements.laneR,
+        integrity: status,
+        status: status === 'PASS' ? 'PASS (Intact)' : 'FAIL (Compromised)',
+      },
+    }
+    setMeasurements(updated)
   }
 
   const calculateDose = () => {
@@ -270,7 +351,8 @@ export default function NewScanPage() {
           {
             lane_a_length_mm: measurements.laneA?.lengthMM,
             lane_b_length_mm: measurements.laneB?.lengthMM,
-            lane_r_status: measurements.laneR?.status,
+            lane_r_length_mm: measurements.laneR?.lengthMM,
+            lane_r_status: measurements.laneR?.status || 'PASS (Intact)',
             a_b_ratio: doseResult.calculations?.ratio,
             temperature_c: scanData.temperatureC ? parseFloat(scanData.temperatureC) : null,
             relative_humidity: scanData.relativeHumidity ? parseFloat(scanData.relativeHumidity) : null,
@@ -360,33 +442,34 @@ export default function NewScanPage() {
           </div>
         )}
 
-        {/* Step 1: Capture or Upload */}
+        {/* Step 1: Direct Phone Camera Capture or File Upload */}
         {step === 1 && (
-          <div className="card" style={{ textAlign: 'center', padding: 40 }}>
-            <Camera size={64} strokeWidth={1} style={{ color: 'var(--color-text-tertiary)', marginBottom: 20 }} />
-            <h3 style={{ marginBottom: 12 }}>Capture or Upload Irisathenas Band</h3>
-            <p style={{ color: 'var(--color-text-secondary)', marginBottom: 24, maxWidth: 540, margin: '0 auto 24px' }}>
-              Take a photo of your wristband with all three lanes visible. The CV engine will automatically detect orientation tilt and align floating measurement lines.
+          <div className="card" style={{ textAlign: 'center', padding: '36px 20px' }}>
+            <Camera size={56} strokeWidth={1.5} style={{ color: 'var(--color-primary)', marginBottom: 16 }} />
+            <h3 style={{ marginBottom: 10 }}>Capture or Upload Badge Photo</h3>
+            <p style={{ color: 'var(--color-text-secondary)', marginBottom: 24, maxWidth: 540, margin: '0 auto 24px', fontSize: 14 }}>
+              Photograph the watch face display showing the three strips (High Humident, Low Humident, Integrity) and the 0–50 mm common length scale.
             </p>
 
             {cameraError && (
-              <div className="alert alert-warning" style={{ maxWidth: 500, margin: '0 auto 20px', textAlign: 'left' }}>
+              <div className="alert alert-warning" style={{ maxWidth: 540, margin: '0 auto 20px', textAlign: 'left' }}>
                 <AlertTriangle size={18} />
                 <span>{cameraError}</span>
               </div>
             )}
 
             {isLiveCameraOpen ? (
-              <div style={{ maxWidth: 640, margin: '0 auto', textAlign: 'center' }}>
+              <div style={{ maxWidth: 680, margin: '0 auto', textAlign: 'center' }}>
                 <div style={{
                   position: 'relative',
                   width: '100%',
                   aspectRatio: '4/3',
                   background: '#000',
-                  borderRadius: 12,
+                  borderRadius: 14,
                   overflow: 'hidden',
                   marginBottom: 16,
                   border: '2px solid var(--color-primary)',
+                  boxShadow: '0 8px 30px rgba(0,0,0,0.5)',
                 }}>
                   <video
                     ref={videoRef}
@@ -396,50 +479,134 @@ export default function NewScanPage() {
                     style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                   />
 
-                  {/* Floating alignment guides overlay over live video */}
+                  {/* Enlarged Measurement Grid Overlay matching the Common Scale Display */}
                   <div style={{
                     position: 'absolute',
-                    top: '25%',
-                    left: '10%',
-                    right: '10%',
-                    bottom: '25%',
-                    border: '2px dashed rgba(0, 210, 255, 0.9)',
-                    borderRadius: 8,
+                    top: '10%',
+                    bottom: '12%',
+                    left: '6%',
+                    right: '6%',
+                    border: '2.5px solid #00d2ff',
+                    borderRadius: 10,
                     display: 'flex',
                     flexDirection: 'column',
-                    justifyContent: 'space-between',
                     pointerEvents: 'none',
-                    background: 'rgba(0, 102, 204, 0.1)',
+                    background: 'rgba(10, 22, 40, 0.40)',
+                    boxShadow: '0 0 20px rgba(0, 210, 255, 0.4)',
                   }}>
-                    <div style={{ height: '33.3%', borderBottom: '1px dashed rgba(255, 255, 255, 0.6)', display: 'flex', alignItems: 'center', paddingLeft: 8, color: '#fff', fontSize: 11, fontWeight: 600 }}>
-                      Lane A (Dose)
+                    {/* Strip 1: High Humident */}
+                    <div style={{
+                      flex: 1,
+                      borderBottom: '1px dashed rgba(255, 255, 255, 0.5)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      padding: '0 12px',
+                      color: '#fecdd3',
+                      fontSize: 12,
+                      fontWeight: 600,
+                    }}>
+                      <span>High Humident</span>
+                      <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.7)' }}>Strip 1 (Dose)</span>
                     </div>
-                    <div style={{ height: '33.3%', borderBottom: '1px dashed rgba(255, 255, 255, 0.6)', display: 'flex', alignItems: 'center', paddingLeft: 8, color: '#fff', fontSize: 11, fontWeight: 600 }}>
-                      Lane B (Humidity)
+
+                    {/* Strip 2: Low Humident */}
+                    <div style={{
+                      flex: 1,
+                      borderBottom: '1px dashed rgba(255, 255, 255, 0.5)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      padding: '0 12px',
+                      color: '#cffafe',
+                      fontSize: 12,
+                      fontWeight: 600,
+                    }}>
+                      <span>Low Humident</span>
+                      <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.7)' }}>Strip 2 (Humidity)</span>
                     </div>
-                    <div style={{ height: '33.3%', display: 'flex', alignItems: 'center', paddingLeft: 8, color: '#fff', fontSize: 11, fontWeight: 600 }}>
-                      Lane R (Integrity)
+
+                    {/* Strip 3: Integrity */}
+                    <div style={{
+                      flex: 1,
+                      borderBottom: '1.5px solid #38bdf8',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      padding: '0 12px',
+                      color: '#d1fae5',
+                      fontSize: 12,
+                      fontWeight: 600,
+                    }}>
+                      <span>Integrity</span>
+                      <span style={{ fontSize: 10, color: '#10b981' }}>Strip 3 (Poka-Yoke)</span>
+                    </div>
+
+                    {/* Common Length Scale (0–50 mm) at bottom */}
+                    <div style={{
+                      height: 38,
+                      background: 'rgba(0, 0, 0, 0.55)',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      justifyContent: 'center',
+                      padding: '0 8px',
+                      color: '#fff',
+                    }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, fontFamily: 'monospace', fontWeight: 600, padding: '0 4px' }}>
+                        <span>0</span>
+                        <span>10</span>
+                        <span>20</span>
+                        <span>30</span>
+                        <span>40</span>
+                        <span>50 mm</span>
+                      </div>
+                      <div style={{ fontSize: 9.5, color: '#94a3b8', textAlign: 'center', marginTop: 2 }}>
+                        Length Scale (Common for all Strips)
+                      </div>
                     </div>
                   </div>
 
+                  {/* Switch Camera Button (top-right of viewfinder) */}
+                  <button
+                    onClick={toggleCameraFacingMode}
+                    style={{
+                      position: 'absolute',
+                      top: 12,
+                      right: 12,
+                      background: 'rgba(0,0,0,0.65)',
+                      color: '#fff',
+                      border: '1px solid rgba(255,255,255,0.4)',
+                      borderRadius: 8,
+                      padding: '8px 12px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 6,
+                      fontSize: 12,
+                      cursor: 'pointer',
+                      zIndex: 10,
+                    }}
+                  >
+                    <SwitchCamera size={16} /> Switch Camera
+                  </button>
+
                   <div style={{
                     position: 'absolute',
-                    bottom: 12,
+                    bottom: 8,
                     left: 0,
                     right: 0,
                     textAlign: 'center',
                     color: '#fff',
                     fontSize: 12,
-                    background: 'rgba(0,0,0,0.6)',
+                    background: 'rgba(0,0,0,0.7)',
                     padding: '4px 8px',
                   }}>
-                    Align the physical band inside the 3 floating lanes
+                    Align the watch display inside the 3 strips and common 0–50 mm scale
                   </div>
                 </div>
 
-                <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
-                  <button onClick={captureLiveFrame} className="btn btn-primary btn-lg">
-                    <Camera size={20} /> Snap Photo & Analyze
+                <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
+                  <button onClick={captureLiveFrame} className="btn btn-primary btn-lg" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <Camera size={22} /> Snap Photo & Analyze
                   </button>
                   <button onClick={stopLiveCamera} className="btn btn-secondary">
                     <VideoOff size={18} /> Close Camera
@@ -447,28 +614,30 @@ export default function NewScanPage() {
                 </div>
               </div>
             ) : (
-              <div style={{ display: 'grid', gap: 14, maxWidth: 420, margin: '0 auto' }}>
+              <div style={{ display: 'grid', gap: 14, maxWidth: 440, margin: '0 auto' }}>
                 <button
-                  onClick={startLiveCamera}
+                  onClick={() => startLiveCamera('environment')}
                   className="btn btn-primary btn-lg"
-                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 }}
+                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, padding: 18 }}
                 >
-                  <Video size={20} />
-                  Open Live Viewfinder
+                  <Camera size={22} />
+                  Capture Photo (Direct Phone Camera)
                 </button>
                 <button
                   onClick={() => cameraInputRef.current?.click()}
-                  className="btn btn-secondary btn-lg"
+                  className="btn btn-secondary"
+                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
                 >
-                  <Camera size={20} />
-                  Take Photo (Device Camera)
+                  <Camera size={18} />
+                  Open Native Device Camera App
                 </button>
                 <button
                   onClick={() => fileInputRef.current?.click()}
-                  className="btn btn-secondary btn-lg"
+                  className="btn btn-secondary"
+                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
                 >
-                  <Upload size={20} />
-                  Upload Photo File
+                  <Upload size={18} />
+                  Upload Photo From Files / Gallery
                 </button>
               </div>
             )}
@@ -491,39 +660,81 @@ export default function NewScanPage() {
           </div>
         )}
 
-        {/* Step 2: Image Preview */}
+        {/* Step 2: Image Preview & Blur Detection Check */}
         {step === 2 && (
           <div>
             <div className="card" style={{ marginBottom: 20 }}>
-              <h3 style={{ marginBottom: 16 }}>Image Preview</h3>
+              <h3 style={{ marginBottom: 16 }}>Image Preview & Sharpness Inspection</h3>
+
+              {/* Blur Warning if detected */}
+              {qualityResult?.isBlurry && (
+                <div
+                  className="alert alert-error"
+                  style={{
+                    marginBottom: 20,
+                    display: 'flex',
+                    alignItems: 'flex-start',
+                    gap: 14,
+                    padding: 18,
+                    background: '#fef2f2',
+                    border: '2px solid #ef4444',
+                    borderRadius: 10,
+                  }}
+                >
+                  <AlertTriangle size={28} color="#ef4444" style={{ flexShrink: 0, marginTop: 2 }} />
+                  <div style={{ flex: 1, textAlign: 'left' }}>
+                    <strong style={{ fontSize: 16, display: 'block', color: '#b91c1c', marginBottom: 4 }}>
+                      Photo is blurry — Please Retake
+                    </strong>
+                    <p style={{ fontSize: 13, color: '#7f1d1d', margin: '0 0 14px' }}>
+                      The captured image appears out of focus or motion-blurred (sharpness score: {qualityResult.blurScore} / 38). For accurate distance measurement along the 0–50 mm scale, please retake the photo holding the camera steady.
+                    </p>
+                    <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                      <button
+                        onClick={handleRetake}
+                        className="btn btn-primary btn-sm"
+                        style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: '#ef4444' }}
+                      >
+                        <RotateCcw size={14} /> Retake Photo
+                      </button>
+                      <button
+                        onClick={() => setQualityResult((prev) => ({ ...prev, isBlurry: false }))}
+                        className="btn btn-secondary btn-sm"
+                      >
+                        Proceed Anyway
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               <div style={{ marginBottom: 20 }}>
                 {imagePreview && (
-                  <img src={imagePreview} alt="Captured band" style={{ width: '100%', borderRadius: 8 }} />
+                  <img
+                    src={imagePreview}
+                    alt="Captured band"
+                    style={{ width: '100%', maxHeight: 480, objectFit: 'contain', borderRadius: 8, background: '#000' }}
+                  />
                 )}
               </div>
 
               <div style={{ padding: 16, background: 'var(--color-bg)', borderRadius: 8, marginBottom: 16 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                  <span style={{ fontSize: 14, fontWeight: 600 }}>Status:</span>
-                  <span className="badge badge-success">READY FOR ROTATED DETECTION</span>
+                  <span style={{ fontSize: 14, fontWeight: 600 }}>Image Status:</span>
+                  {qualityResult?.isBlurry ? (
+                    <span className="badge badge-warning">BLUR WARNING</span>
+                  ) : (
+                    <span className="badge badge-success">SHARP & READY</span>
+                  )}
                 </div>
-                <div style={{ fontSize: 14, color: 'var(--color-text-secondary)', marginTop: 8 }}>
-                  Image loaded. The Irisathenas CV engine will automatically detect band tilt and align 3 floating lines along the band axis.
+                <div style={{ fontSize: 13, color: 'var(--color-text-secondary)', marginTop: 8 }}>
+                  Ready to detect the 3 strips (High Humident, Low Humident, Integrity) and align the common 0–50 mm reference scale.
                 </div>
               </div>
 
               <div style={{ display: 'flex', gap: 12 }}>
-                <button
-                  onClick={() => {
-                    setStep(1)
-                    setImageFile(null)
-                    setImagePreview(null)
-                    setQualityResult(null)
-                  }}
-                  className="btn btn-secondary"
-                >
-                  Retake Photo
+                <button onClick={handleRetake} className="btn btn-secondary">
+                  <RotateCcw size={16} /> Retake Photo
                 </button>
                 <button
                   onClick={performDetection}
@@ -531,7 +742,7 @@ export default function NewScanPage() {
                   disabled={loading}
                   style={{ flex: 1 }}
                 >
-                  {loading ? <span className="loading" /> : 'Run Detection & Align Lines'}
+                  {loading ? <span className="loading" /> : 'Run Detection & Measure Strips'}
                 </button>
               </div>
             </div>
@@ -725,13 +936,154 @@ export default function NewScanPage() {
                 )}
               </div>
 
+              {/* 3 Strips & Common Scale (0–50 mm) Fine Adjustment */}
+              {measurements && (
+                <div style={{
+                  padding: 18,
+                  background: 'var(--color-bg)',
+                  borderRadius: 10,
+                  border: '1px solid var(--color-border)',
+                  marginBottom: 20,
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 600, fontSize: 15, marginBottom: 12 }}>
+                    <Ruler size={18} color="var(--color-primary)" />
+                    3-Strip Readings (Common 0–50 mm Scale)
+                  </div>
+                  <p style={{ fontSize: 13, color: 'var(--color-text-secondary)', marginBottom: 16 }}>
+                    Verify or adjust each strip stain front according to the physical 0–50 mm scale printed on the watch face. Max allowed scale is 50.0 mm.
+                  </p>
+
+                  <div style={{ display: 'grid', gap: 16 }}>
+                    {/* Strip 1: High Humident */}
+                    <div style={{ background: 'var(--color-surface)', padding: 14, borderRadius: 8, border: '1px solid var(--color-border)' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                        <div>
+                          <strong style={{ color: '#ef4444' }}>Strip 1: High Humident</strong>
+                          <span style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginLeft: 8 }}>(Dose Channel)</span>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <input
+                            type="number"
+                            min="0"
+                            max="50"
+                            step="0.1"
+                            value={measurements.laneA?.lengthMM ?? 0}
+                            onChange={(e) => updateStripLength('laneA', e.target.value)}
+                            style={{ width: 70, padding: '4px 6px', textAlign: 'right', fontWeight: 600, borderRadius: 4, border: '1px solid var(--color-border)' }}
+                          />
+                          <span style={{ fontSize: 13 }}>mm</span>
+                        </div>
+                      </div>
+                      <input
+                        type="range"
+                        min="0"
+                        max="50"
+                        step="0.1"
+                        value={measurements.laneA?.lengthMM ?? 0}
+                        onChange={(e) => updateStripLength('laneA', e.target.value)}
+                        style={{ width: '100%', accentColor: '#ef4444' }}
+                      />
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--color-text-secondary)', marginTop: 2 }}>
+                        <span>0 mm</span>
+                        <span>25 mm</span>
+                        <span>50 mm (Max)</span>
+                      </div>
+                    </div>
+
+                    {/* Strip 2: Low Humident */}
+                    <div style={{ background: 'var(--color-surface)', padding: 14, borderRadius: 8, border: '1px solid var(--color-border)' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                        <div>
+                          <strong style={{ color: '#06b6d4' }}>Strip 2: Low Humident</strong>
+                          <span style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginLeft: 8 }}>(Humidity Channel)</span>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <input
+                            type="number"
+                            min="0"
+                            max="50"
+                            step="0.1"
+                            value={measurements.laneB?.lengthMM ?? 0}
+                            onChange={(e) => updateStripLength('laneB', e.target.value)}
+                            style={{ width: 70, padding: '4px 6px', textAlign: 'right', fontWeight: 600, borderRadius: 4, border: '1px solid var(--color-border)' }}
+                          />
+                          <span style={{ fontSize: 13 }}>mm</span>
+                        </div>
+                      </div>
+                      <input
+                        type="range"
+                        min="0"
+                        max="50"
+                        step="0.1"
+                        value={measurements.laneB?.lengthMM ?? 0}
+                        onChange={(e) => updateStripLength('laneB', e.target.value)}
+                        style={{ width: '100%', accentColor: '#06b6d4' }}
+                      />
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--color-text-secondary)', marginTop: 2 }}>
+                        <span>0 mm</span>
+                        <span>25 mm</span>
+                        <span>50 mm (Max)</span>
+                      </div>
+                    </div>
+
+                    {/* Strip 3: Integrity */}
+                    <div style={{ background: 'var(--color-surface)', padding: 14, borderRadius: 8, border: '1px solid var(--color-border)' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                        <div>
+                          <strong style={{ color: '#10b981' }}>Strip 3: Integrity</strong>
+                          <span style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginLeft: 8 }}>(Poka-Yoke Reference)</span>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <button
+                            type="button"
+                            onClick={() => toggleIntegrityStatus('PASS')}
+                            className={measurements.laneR?.integrity === 'PASS' ? 'btn btn-primary btn-sm' : 'btn btn-secondary btn-sm'}
+                            style={{ padding: '3px 10px', fontSize: 12 }}
+                          >
+                            PASS
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => toggleIntegrityStatus('FAIL')}
+                            className={measurements.laneR?.integrity === 'FAIL' ? 'btn btn-sm' : 'btn btn-secondary btn-sm'}
+                            style={{
+                              padding: '3px 10px',
+                              fontSize: 12,
+                              background: measurements.laneR?.integrity === 'FAIL' ? '#ef4444' : undefined,
+                              color: measurements.laneR?.integrity === 'FAIL' ? '#fff' : undefined,
+                            }}
+                          >
+                            FAIL
+                          </button>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginLeft: 8 }}>
+                            <input
+                              type="number"
+                              min="0"
+                              max="50"
+                              step="0.1"
+                              value={measurements.laneR?.lengthMM ?? 0}
+                              onChange={(e) => updateStripLength('laneR', e.target.value)}
+                              style={{ width: 60, padding: '4px 6px', textAlign: 'right', fontWeight: 600, borderRadius: 4, border: '1px solid var(--color-border)' }}
+                            />
+                            <span style={{ fontSize: 13 }}>mm</span>
+                          </div>
+                        </div>
+                      </div>
+                      <div style={{ fontSize: 12, color: measurements.laneR?.integrity === 'PASS' ? '#10b981' : '#ef4444', fontWeight: 600 }}>
+                        {measurements.laneR?.integrity === 'PASS' ? '✓ Integrity Verified: Badge is sealed and intact' : '✗ Integrity Check Failed: Badge compromised'}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Status checklist */}
               <div style={{ display: 'grid', gap: 10, marginBottom: 20 }}>
                 <DetectionStatus label="Orientation Stabilized" status={true} />
-                <DetectionStatus label="Fiducials Normalized (50mm span)" status={detectionResult.fiducialsDetected} />
-                <DetectionStatus label="Lane A (Dose Channel)" status={detectionResult.lanesDetected.A} />
-                <DetectionStatus label="Lane B (Humidity Channel)" status={detectionResult.lanesDetected.B} />
-                <DetectionStatus label="Lane R (Integrity Poka-Yoke)" status={detectionResult.lanesDetected.R} />
+                <DetectionStatus label="Common Scale Reference (0–50 mm)" status={detectionResult.fiducialsDetected} />
+                <DetectionStatus label="Strip 1: High Humident" status={detectionResult.lanesDetected?.A} />
+                <DetectionStatus label="Strip 2: Low Humident" status={detectionResult.lanesDetected?.B} />
+                <DetectionStatus label="Strip 3: Integrity" status={measurements.laneR?.integrity === 'PASS'} />
               </div>
 
               <button
@@ -754,19 +1106,19 @@ export default function NewScanPage() {
 
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 14, marginBottom: 24 }}>
                 <MeasurementDisplay
-                  label="Lane A Length"
+                  label="Strip 1: High Humident"
                   value={measurements.laneA?.lengthMM?.toFixed(2)}
                   unit="mm"
                   detected={measurements.laneA?.detected}
                 />
                 <MeasurementDisplay
-                  label="Lane B Length"
+                  label="Strip 2: Low Humident"
                   value={measurements.laneB?.lengthMM?.toFixed(2)}
                   unit="mm"
                   detected={measurements.laneB?.detected}
                 />
                 <MeasurementDisplay
-                  label="Lane R Integrity"
+                  label="Strip 3: Integrity"
                   value={measurements.laneR?.status}
                   status={measurements.laneR?.integrity}
                 />
@@ -1014,9 +1366,9 @@ export default function NewScanPage() {
                   <div style={{ fontSize: 14, color: 'var(--color-text-secondary)', marginBottom: 4 }}>Integrity Status</div>
                   <div>
                     {doseResult.integrityStatus === 'PASS' ? (
-                      <span className="badge badge-success">PASS (Lane R Clean)</span>
+                      <span className="badge badge-success">PASS (Badge Sealed & Intact)</span>
                     ) : (
-                      <span className="badge badge-error">FAIL (Lane R Stained)</span>
+                      <span className="badge badge-error">FAIL (Integrity Compromised)</span>
                     )}
                   </div>
                 </div>

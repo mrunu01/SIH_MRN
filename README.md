@@ -59,7 +59,7 @@ Irisathenas Band is calibrated to a verified linear loading relationship:
 - **Conversion Factor ($\alpha$):** $0.2285714\text{ (ppm}\cdot\text{hr})/\text{mm}$
 - **Formula:** $\text{Dose (ppm}\cdot\text{hr)} = \text{Length}_A \times \alpha \times R$ (where $R = \text{Length}_A / \text{Length}_B$)
 
-### Calibration Reference Scale:
+### Calibration Reference Scale (0 to 50.0 mm Common Scale):
 | Nominal Dose (ppm·hr) | Theoretical Stain Length (mm) | OSHA / Industrial Status |
 |:---:|:---:|:---|
 | **1.0** | 4.4 mm | Normal (Baseline) |
@@ -68,9 +68,7 @@ Irisathenas Band is calibrated to a verified linear loading relationship:
 | **6.0** | 26.3 mm | Moderate Exposure |
 | **8.0** | **35.0 mm (Anchor)** | **Moderate Exposure** |
 | **10.0** | 43.8 mm | Elevated Exposure |
-| **16.0** | 70.0 mm | Action Required |
-| **32.0** | 140.0 mm | PEL Exceeded (Evacuate) |
-| **64.0** | 280.0 mm | Ceiling Exceeded (Danger) |
+| **11.4** | **50.0 mm (Scale Maximum)** | **Ceiling Limit (50 mm Physical Cap)** |
 
 ---
 
